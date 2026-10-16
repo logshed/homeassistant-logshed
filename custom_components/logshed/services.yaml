@@ -1,9 +1,6 @@
 enable_maintenance:
   name: Enable Maintenance Window
   description: Starts an on-demand LogShed maintenance window to silence alerts and optionally drop error logs.
-  target:
-    device:
-      integration: logshed
   fields:
     duration_minutes:
       name: Duration (Minutes)
@@ -51,9 +48,6 @@ enable_maintenance:
 disable_maintenance:
   name: Disable Maintenance Window
   description: Terminates active LogShed maintenance windows.
-  target:
-    device:
-      integration: logshed
   fields:
     session_id:
       name: Session ID
