@@ -27,6 +27,7 @@ MANIFEST
 
 # Virtual environments
 .venv/
+.uv_python/
 venv/
 ENV/
 env/

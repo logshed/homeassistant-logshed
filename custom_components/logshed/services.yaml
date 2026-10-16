@@ -1,0 +1,63 @@
+enable_maintenance:
+  name: Enable Maintenance Window
+  description: Starts an on-demand LogShed maintenance window to silence alerts and optionally drop error logs.
+  target:
+    device:
+      integration: logshed
+  fields:
+    duration_minutes:
+      name: Duration (Minutes)
+      description: Length of the maintenance session in minutes.
+      default: 30
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+          mode: box
+    reason:
+      name: Reason
+      description: Descriptive reason for the maintenance window for audit logs.
+      default: Home Assistant automation
+      required: false
+      selector:
+        text:
+    log_handling:
+      name: Log Handling
+      description: Silence alerts only, or silence alerts and drop error logs.
+      default: silence_alerts
+      required: false
+      selector:
+        select:
+          options:
+            - label: Silence alerts only
+              value: silence_alerts
+            - label: Silence alerts & drop error logs
+              value: drop_errors
+    target_app:
+      name: Target App / Container
+      description: Optional filter to drop errors only from a specific application or container.
+      required: false
+      selector:
+        text:
+    target_host:
+      name: Target Host
+      description: Optional filter to drop errors only from a specific host machine.
+      required: false
+      selector:
+        text:
+
+disable_maintenance:
+  name: Disable Maintenance Window
+  description: Terminates active LogShed maintenance windows.
+  target:
+    device:
+      integration: logshed
+  fields:
+    session_id:
+      name: Session ID
+      description: Optional specific maintenance session ID to terminate. Clears all active on-demand sessions if omitted.
+      required: false
+      selector:
+        text:

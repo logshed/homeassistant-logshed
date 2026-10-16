@@ -25,6 +25,11 @@ homeassistant-logshed/
 |       `-- release.yml          # GitHub release workflow for semver tags
 |-- custom_components/
 |   `-- logshed/
+|       |-- brand/               # Local brand proxy assets (HA 2026.3+)
+|       |   |-- icon.png
+|       |   |-- icon@2x.png
+|       |   |-- logo.png
+|       |   `-- logo@2x.png
 |       |-- __init__.py          # Entry setup, coordinator lifecycle, platform forwarding
 |       |-- api.py               # Asynchronous LogShed REST API client (aiohttp)
 |       |-- binary_sensor.py     # Alert state, maintenance active, connectivity sensors
@@ -44,12 +49,19 @@ homeassistant-logshed/
 |-- tests/
 |   |-- __init__.py
 |   |-- conftest.py              # HA fixtures & mock aiohttp responses
+|   |-- test_api.py              # REST API client tests
+|   |-- test_binary_sensor.py    # Binary sensor tests
+|   |-- test_button.py           # Button tests
 |   |-- test_config_flow.py      # Config flow, options, reauth tests
 |   |-- test_coordinator.py      # Polling and error handling tests
+|   |-- test_init.py             # Setup and unload lifecycle tests
 |   |-- test_sensor.py           # Sensor state & extra attribute verification
-|   |-- test_switch.py           # Switch control tests
-|   `-- test_services.py         # Service call execution tests
+|   |-- test_services.py         # Service call execution tests
+|   `-- test_switch.py           # Switch control tests
+|-- CHANGELOG.md                 # Project version changelog (Keep a Changelog)
 |-- hacs.json                    # HACS repository metadata
+|-- icon.png                     # Repository brand icon
+|-- logo.png                     # Repository brand logo
 |-- pyproject.toml               # Development dependencies, ruff & pytest config
 `-- README.md                    # Installation instructions, Lovelace snippets, automations
 ```
@@ -74,12 +86,13 @@ homeassistant-logshed/
   - `host`: LogShed instance URL (e.g., `http://192.168.1.100:8000`)
   - `api_token`: Bearer token (`ls_live_...`)
   - `verify_ssl`: Boolean (default `True`, toggleable for self-signed certificates)
+  - `default_maintenance_duration`: Integer in minutes (default `60`, range 5 to 720)
 - Validates credentials via `GET /api/v1/auth/verify` and fetches initial system info from `GET /api/v1/system/metrics`.
 - Set unique ID from `instance_id` (fallback to normalized `host:port`) to avoid duplicate entries and preserve entity history across IP changes.
-- Implement Reauth Flow for 401/403 token expirations and Options Flow for runtime settings.
+- Implement Reauth Flow for 401/403 token expirations and Options Flow for runtime settings (polling interval, default maintenance duration, and log handling mode). Do not set `self.config_entry` directly in `OptionsFlow.__init__` as that setter is deprecated in modern HA.
 
 ### D. Entities & State Management
-- **Sensors:** Declare explicit `state_class` (`SensorStateClass.MEASUREMENT`, `TOTAL`, or `TOTAL_INCREASING`) and `device_class` (`SensorDeviceClass.DATA_SIZE`, `DURATION`, etc.) so Home Assistant Long-Term Statistics (LTS) track them automatically.
+- **Sensors:** Declare explicit `state_class` (`SensorStateClass.MEASUREMENT`, `TOTAL`, or `TOTAL_INCREASING`) and `device_class` (`SensorDeviceClass.DATA_SIZE`, `DURATION`, etc.) so Home Assistant Long-Term Statistics (LTS) track them automatically. Disk Used Percent uses icon `mdi:chart-pie`.
 - **Attributes:** Rolling error sensors (`sensor.logshed_error_count_24h` and `1h`) must provide breakdown attributes: `top_error_apps` and `top_error_hosts` (`[{"name": "...", "count": N}]`).
 - **Binary Sensors:** Problem device class for `binary_sensor.logshed_alert_state` (15-minute sliding window), `connectivity` for polling status, and custom for active maintenance.
 - **Device Info:** Group all entities under a unified LogShed device entry via `DeviceInfo(identifiers={(DOMAIN, instance_id)}, ...)` so they appear cleanly under **Settings > Devices & Services**.

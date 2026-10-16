@@ -1,0 +1,145 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to LogShed",
+        "description": "Configure connection to your LogShed instance.",
+        "data": {
+          "host": "Host URL",
+          "api_token": "API Token",
+          "verify_ssl": "Verify SSL Certificate",
+          "default_maintenance_duration": "Default Maintenance Duration (minutes)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate with LogShed",
+        "description": "Your LogShed API token has expired or is invalid. Please provide a new token.",
+        "data": {
+          "api_token": "API Token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to LogShed instance. Please check the host URL and network.",
+      "invalid_auth": "Invalid API token or insufficient permissions (requires 'system:read' scope).",
+      "invalid_host": "Invalid host URL. Format should be http://host:port or https://host:port.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This LogShed instance is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "LogShed Options",
+        "description": "Configure polling and maintenance settings.",
+        "data": {
+          "scan_interval": "Metrics Polling Interval (seconds)",
+          "default_maintenance_duration": "Default Maintenance Duration (minutes)",
+          "default_maintenance_log_handling": "Default Maintenance Log Handling"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "ingestion_rate": {
+        "name": "Ingestion Rate"
+      },
+      "error_count_24h": {
+        "name": "Error Count 24h"
+      },
+      "error_count_1h": {
+        "name": "Error Count 1h"
+      },
+      "total_logs": {
+        "name": "Total Logs"
+      },
+      "database_size": {
+        "name": "Database Size"
+      },
+      "disk_free": {
+        "name": "Disk Free"
+      },
+      "disk_used_percent": {
+        "name": "Disk Used Percent"
+      },
+      "queue_depth": {
+        "name": "Queue Depth"
+      },
+      "dropped_logs": {
+        "name": "Dropped Logs"
+      },
+      "filtered_logs": {
+        "name": "Filtered Logs"
+      },
+      "maintenance_remaining": {
+        "name": "Maintenance Remaining"
+      }
+    },
+    "binary_sensor": {
+      "alert_state": {
+        "name": "Alert State"
+      },
+      "maintenance_active": {
+        "name": "Maintenance Active"
+      },
+      "connectivity": {
+        "name": "Connectivity"
+      }
+    },
+    "switch": {
+      "maintenance_mode": {
+        "name": "Maintenance Mode"
+      }
+    },
+    "button": {
+      "prune_database": {
+        "name": "Prune Database"
+      },
+      "vacuum_database": {
+        "name": "Vacuum Database"
+      }
+    }
+  },
+  "services": {
+    "enable_maintenance": {
+      "name": "Enable Maintenance Window",
+      "description": "Starts an on-demand LogShed maintenance window to silence alerts and optionally drop error logs.",
+      "fields": {
+        "duration_minutes": {
+          "name": "Duration (Minutes)",
+          "description": "Duration of the maintenance window in minutes (1 to 1440)."
+        },
+        "reason": {
+          "name": "Reason",
+          "description": "Reason for the maintenance window for audit logs."
+        },
+        "log_handling": {
+          "name": "Log Handling",
+          "description": "Mode: silence_alerts or drop_errors."
+        },
+        "target_app": {
+          "name": "Target App",
+          "description": "Optional filter to drop errors only from a specific application or container."
+        },
+        "target_host": {
+          "name": "Target Host",
+          "description": "Optional filter to drop errors only from a specific host machine."
+        }
+      }
+    },
+    "disable_maintenance": {
+      "name": "Disable Maintenance Window",
+      "description": "Terminates active LogShed maintenance windows.",
+      "fields": {
+        "session_id": {
+          "name": "Session ID",
+          "description": "Optional specific session ID to terminate. Clears all active on-demand sessions if omitted."
+        }
+      }
+    }
+  }
+}

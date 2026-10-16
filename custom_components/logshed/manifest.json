@@ -1,0 +1,12 @@
+{
+  "domain": "logshed",
+  "name": "LogShed",
+  "codeowners": ["@BenHornerTech"],
+  "config_flow": true,
+  "documentation": "https://github.com/logshed/homeassistant-logshed",
+  "issue_tracker": "https://github.com/logshed/homeassistant-logshed/issues",
+  "iot_class": "local_polling",
+  "version": "1.0.0",
+  "integration_type": "hub",
+  "requirements": []
+}
