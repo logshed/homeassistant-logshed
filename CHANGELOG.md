@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 11 sensor entities for real-time and Long-Term Statistics (LTS):
   - Ingestion Rate (`logs/s`)
   - Rolling 24-hour and 1-hour Error Counts with top offending applications (`top_error_apps`) and hosts (`top_error_hosts`)
-  - Total Lifetime Logs
+  - Total Stored Logs
   - Database File Size (`MB`)
   - Free Disk Space (`GB`)
   - Disk Used Percent (`%`)

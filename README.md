@@ -72,7 +72,7 @@ Click **Configure** on the LogShed integration card to adjust runtime options:
 | `sensor.logshed_ingestion_rate` | Ingestion Rate | `logs/s` | `measurement` | Real-time log ingestion rate. |
 | `sensor.logshed_error_count_24h` | Errors (24h) | `errors` | `total` | Rolling 24-hour error count. Includes `top_error_apps` and `top_error_hosts` attributes. |
 | `sensor.logshed_error_count_1h` | Errors (1h) | `errors` | `total` | Rolling 1-hour error spike count. Includes `top_error_apps` and `top_error_hosts` attributes. |
-| `sensor.logshed_total_logs` | Total Logs | `logs` | `total_increasing` | Lifetime total logs indexed. |
+| `sensor.logshed_total_logs` | Total Logs | `logs` | `measurement` | Current count of stored logs in the database. |
 | `sensor.logshed_database_size` | Database Size | `MB` | `data_size` | SQLite database file size. |
 | `sensor.logshed_disk_free` | Disk Space Free | `GB` | `data_size` | Free space on the LogShed storage mount. |
 | `sensor.logshed_disk_used_percent` | Disk Used | `%` | `measurement` | Storage mount disk usage percentage. |

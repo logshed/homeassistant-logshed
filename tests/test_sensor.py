@@ -65,6 +65,7 @@ async def test_sensors_state_and_attributes(
     state = hass.states.get("sensor.logshed_total_logs")
     assert state is not None
     assert int(state.state) == 500000
+    assert state.attributes.get("state_class") == "measurement"
 
     # 5. Database Size
     state = hass.states.get("sensor.logshed_database_size")

@@ -68,7 +68,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         key="total_logs",
         translation_key="total_logs",
         icon="mdi:database",
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="logs",
         value_fn=lambda metrics: metrics.total_logs_count,
     ),
