@@ -28,7 +28,7 @@ class LogShedEntity(CoordinatorEntity[LogShedDataUpdateCoordinator]):
         """Return device information about this LogShed instance."""
         return DeviceInfo(
             identifiers={(DOMAIN, self.coordinator.data.instance_id)},
-            name="LogShed",
+            name=self.coordinator.data.server_name or "LogShed",
             manufacturer="LogShed",
             model="Log Management Server",
             sw_version=self.coordinator.data.version,

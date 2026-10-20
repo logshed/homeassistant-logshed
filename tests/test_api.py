@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, Mock
+import asyncio
+from unittest.mock import AsyncMock, Mock, patch
 
 import aiohttp
 import pytest
@@ -12,11 +13,15 @@ from custom_components.logshed.api import (
     LogShedBadRequest,
     LogShedCannotConnect,
     LogShedConflict,
+    LogShedError,
     LogShedInvalidAuth,
     LogShedMetrics,
+    LogShedNotFound,
+    LogShedOperationTimeout,
     LogShedRateLimited,
     LogShedServerError,
 )
+from custom_components.logshed.const import DEFAULT_REQUEST_TIMEOUT, LONG_OPERATION_TIMEOUT
 
 from .conftest import (
     MOCK_AUTH_VERIFY_RESPONSE,
@@ -57,7 +62,7 @@ async def test_api_get_system_metrics_success() -> None:
 
     client = LogShedApiClient(MOCK_HOST, MOCK_TOKEN, session)
     metrics = await client.async_get_system_metrics()
-    assert metrics.server_name == "TestShed"
+    assert metrics.server_name == "LogShed"
     assert metrics.ingest_rate == 42.5
     assert metrics.maintenance_active is True
     assert metrics.emergency_logs_24h == 0
@@ -192,3 +197,77 @@ async def test_api_network_exceptions() -> None:
     )
     with pytest.raises(LogShedCannotConnect, match="SSL certificate error"):
         await client.async_verify_auth()
+
+
+async def test_api_client_error_statuses() -> None:
+    """Test 404, 422 and other 4xx responses map to specific errors, never network errors."""
+    session = AsyncMock()
+    client = LogShedApiClient(MOCK_HOST, MOCK_TOKEN, session)
+
+    session.request = AsyncMock(
+        return_value=_mock_response(404, {"detail": "No active maintenance session with ID x."})
+    )
+    with pytest.raises(LogShedNotFound, match="No active maintenance session"):
+        await client.async_disable_maintenance(session_id="x")
+
+    session.request = AsyncMock(
+        return_value=_mock_response(
+            422,
+            {
+                "detail": [
+                    {"loc": ["body", "duration_minutes"], "msg": "Input should be <= 1440"},
+                    {"loc": ["body", "reason"], "msg": "String too long"},
+                ]
+            },
+        )
+    )
+    with pytest.raises(LogShedBadRequest, match="Input should be <= 1440; String too long"):
+        await client.async_enable_maintenance(duration_minutes=5000)
+
+    session.request = AsyncMock(return_value=_mock_response(418, {"detail": "Teapot"}))
+    with pytest.raises(LogShedError, match="HTTP 418: Teapot") as exc_info:
+        await client.async_get_system_metrics()
+    assert not isinstance(exc_info.value, LogShedCannotConnect)
+
+    # Body without JSON falls back to a default message
+    session.request = AsyncMock(return_value=_mock_response(405))
+    with pytest.raises(LogShedError, match="HTTP 405"):
+        await client.async_get_system_metrics()
+
+
+async def test_api_long_operations_use_long_timeout() -> None:
+    """Test prune and vacuum wait up to 10 minutes; other requests keep the short timeout."""
+    session = AsyncMock()
+    session.request = AsyncMock(return_value=_mock_response(200, {"status": "ok"}))
+    client = LogShedApiClient(MOCK_HOST, MOCK_TOKEN, session)
+
+    with patch("custom_components.logshed.api.asyncio.timeout", wraps=asyncio.timeout) as timeout:
+        await client.async_trigger_prune()
+        await client.async_trigger_vacuum()
+        await client.async_verify_auth()
+    assert [c.args[0] for c in timeout.call_args_list] == [
+        LONG_OPERATION_TIMEOUT,
+        LONG_OPERATION_TIMEOUT,
+        DEFAULT_REQUEST_TIMEOUT,
+    ]
+
+
+async def test_api_long_operation_timeout_may_still_run() -> None:
+    """Test a timed-out prune says it may still be running, unlike a normal timeout."""
+    session = AsyncMock()
+    session.request = AsyncMock(side_effect=TimeoutError())
+    client = LogShedApiClient(MOCK_HOST, MOCK_TOKEN, session)
+
+    with pytest.raises(LogShedOperationTimeout, match="may still be running on the server"):
+        await client.async_trigger_prune()
+    with pytest.raises(LogShedOperationTimeout):
+        await client.async_trigger_vacuum()
+    with pytest.raises(LogShedCannotConnect, match="Timeout"):
+        await client.async_get_system_metrics()
+
+
+def test_metrics_udp_receive_errors() -> None:
+    """Test udp_receive_errors parses as a count and stays None when LogShed sends null."""
+    assert LogShedMetrics.from_dict(MOCK_SYSTEM_METRICS_RESPONSE).udp_receive_errors == 7
+    data = {**MOCK_SYSTEM_METRICS_RESPONSE, "udp_receive_errors": None}
+    assert LogShedMetrics.from_dict(data).udp_receive_errors is None

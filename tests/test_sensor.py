@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from homeassistant.const import EntityCategory, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.logshed.api import LogShedApiClient, LogShedMetrics
+
+from .conftest import setup_integration
 
 
 async def test_sensors_state_and_attributes(
@@ -74,7 +77,7 @@ async def test_sensors_state_and_attributes(
         assert state is not None, entity_id
         assert int(state.state) == expected
         assert state.attributes.get("unit_of_measurement") == "logs"
-        assert state.attributes.get("state_class") == "total"
+        assert state.attributes.get("state_class") == "measurement"
 
     # 4. Total Logs
     state = hass.states.get("sensor.logshed_total_logs")
@@ -85,13 +88,16 @@ async def test_sensors_state_and_attributes(
     # 5. Database Size
     state = hass.states.get("sensor.logshed_database_size")
     assert state is not None
-    assert float(state.state) == 100.0
+    # 104857600 bytes shown in decimal megabytes
+    assert float(state.state) == pytest.approx(104.8576)
     assert state.attributes.get("unit_of_measurement") == "MB"
+    assert state.attributes.get("device_class") == "data_size"
 
     # 6. Disk Free
     state = hass.states.get("sensor.logshed_disk_free")
     assert state is not None
-    assert float(state.state) == 100.0
+    # 107374182400 bytes (100 GiB) shown in decimal gigabytes
+    assert float(state.state) == pytest.approx(107.3741824)
     assert state.attributes.get("unit_of_measurement") == "GB"
 
     # 7. Disk Used Percent
@@ -116,6 +122,13 @@ async def test_sensors_state_and_attributes(
     assert state is not None
     assert int(state.state) == 25
 
+    # 10a. UDP Lost
+    state = hass.states.get("sensor.logshed_udp_lost")
+    assert state is not None
+    assert int(state.state) == 7
+    assert state.attributes.get("unit_of_measurement") == "datagrams"
+    assert state.attributes.get("state_class") == "total_increasing"
+
     # 11. Maintenance Remaining
     state = hass.states.get("sensor.logshed_maintenance_remaining")
     assert state is not None
@@ -135,10 +148,39 @@ async def test_sensors_state_and_attributes(
         "queue_depth",
         "dropped_logs",
         "filtered_logs",
+        "udp_lost",
     }
     sensor_entries = er.async_entries_for_config_entry(entity_reg, mock_config_entry.entry_id)
-    assert len(sensor_entries) == 16
+    assert len(sensor_entries) == 17
     for reg_entry in sensor_entries:
         key = reg_entry.unique_id.removeprefix(f"{mock_metrics.instance_id}_")
         expected = EntityCategory.DIAGNOSTIC if key in diagnostic else None
         assert reg_entry.entity_category == expected, key
+
+
+async def test_error_or_worse_sensors_are_measurements(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """Test the rolling error or worse counts are gauges, not totals."""
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
+
+    for entity_id in (
+        "sensor.logshed_error_or_worse_logs_24h",
+        "sensor.logshed_error_or_worse_logs_1h",
+    ):
+        assert hass.states.get(entity_id).attributes.get("state_class") == "measurement"
+
+
+async def test_udp_lost_unknown_when_not_reported(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+    mock_metrics: LogShedMetrics,
+) -> None:
+    """Test UDP Lost is unknown when LogShed cannot read the counter (null)."""
+    mock_metrics.udp_receive_errors = None
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
+
+    assert hass.states.get("sensor.logshed_udp_lost").state == "unknown"

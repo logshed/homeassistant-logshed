@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -10,22 +11,43 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import LogShedApiClient, LogShedCannotConnect, LogShedInvalidAuth, LogShedMetrics
+from .api import (
+    LogShedApiClient,
+    LogShedCannotConnect,
+    LogShedInvalidAuth,
+    LogShedMetrics,
+    has_scope,
+)
 from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
+@dataclass
+class LogShedRuntimeData:
+    """Runtime data stored on a LogShed config entry."""
+
+    coordinator: LogShedDataUpdateCoordinator
+    scopes: list[str]
+
+    def has_scope(self, scope: str) -> bool:
+        """Return True if the entry's API token grants the scope."""
+        return has_scope(self.scopes, scope)
+
+
+type LogShedConfigEntry = ConfigEntry[LogShedRuntimeData]
+
+
 class LogShedDataUpdateCoordinator(DataUpdateCoordinator[LogShedMetrics]):
     """Class to manage fetching LogShed data from the API."""
 
-    config_entry: ConfigEntry
+    config_entry: LogShedConfigEntry
 
     def __init__(
         self,
         hass: HomeAssistant,
         api: LogShedApiClient,
-        entry: ConfigEntry,
+        entry: LogShedConfigEntry,
     ) -> None:
         """Initialize the coordinator."""
         self.api = api

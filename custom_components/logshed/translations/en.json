@@ -11,6 +11,14 @@
           "default_maintenance_duration": "Default Maintenance Duration (minutes)"
         }
       },
+      "reconfigure": {
+        "title": "Reconfigure LogShed",
+        "description": "Change the address of your LogShed instance. The API token stays the same.",
+        "data": {
+          "host": "Host URL",
+          "verify_ssl": "Verify SSL Certificate"
+        }
+      },
       "reauth_confirm": {
         "title": "Reauthenticate with LogShed",
         "description": "Your LogShed API token has expired or is invalid. Please provide a new token.",
@@ -27,7 +35,9 @@
     },
     "abort": {
       "already_configured": "This LogShed instance is already configured.",
-      "reauth_successful": "Re-authentication was successful."
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "The LogShed connection was updated.",
+      "wrong_instance": "This is a different LogShed instance from the one configured in this entry."
     }
   },
   "options": {
@@ -90,6 +100,9 @@
       "filtered_logs": {
         "name": "Filtered Logs"
       },
+      "udp_lost": {
+        "name": "UDP Lost"
+      },
       "maintenance_remaining": {
         "name": "Maintenance Remaining"
       }
@@ -106,8 +119,8 @@
       }
     },
     "switch": {
-      "maintenance_mode": {
-        "name": "Maintenance Mode"
+      "quick_maintenance": {
+        "name": "Quick Maintenance"
       }
     },
     "button": {
@@ -122,8 +135,12 @@
   "services": {
     "enable_maintenance": {
       "name": "Enable Maintenance Window",
-      "description": "Starts an on-demand LogShed maintenance window to silence alerts and optionally drop error logs.",
+      "description": "Starts an on-demand LogShed maintenance window to silence alerts and optionally drop error logs. Returns the session ID of each window it starts.",
       "fields": {
+        "config_entry_id": {
+          "name": "LogShed Instance",
+          "description": "The LogShed instance to start the window on. Starts one window on every loaded instance if omitted."
+        },
         "duration_minutes": {
           "name": "Duration (Minutes)",
           "description": "Duration of the maintenance window in minutes (1 to 1440)."
@@ -148,11 +165,15 @@
     },
     "disable_maintenance": {
       "name": "Disable Maintenance Window",
-      "description": "Terminates active LogShed maintenance windows.",
+      "description": "Ends LogShed maintenance windows. Pass the session ID returned by Enable Maintenance Window to end only that window; without a session ID, every on-demand window is ended, including windows started from the LogShed web UI, MCP clients or other automations. Scheduled windows are never ended.",
       "fields": {
+        "config_entry_id": {
+          "name": "LogShed Instance",
+          "description": "The LogShed instance to end windows on. Applies to every loaded instance if omitted."
+        },
         "session_id": {
           "name": "Session ID",
-          "description": "Optional specific session ID to terminate. Clears all active on-demand sessions if omitted."
+          "description": "The maintenance session to end, as returned by Enable Maintenance Window. If omitted, every active on-demand session is ended."
         }
       }
     }

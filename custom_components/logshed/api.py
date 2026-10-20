@@ -11,15 +11,27 @@ import aiohttp
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
+    DEFAULT_REQUEST_TIMEOUT,
     ENDPOINT_AUTH_VERIFY,
     ENDPOINT_MAINTENANCE_DISABLE,
     ENDPOINT_MAINTENANCE_ENABLE,
     ENDPOINT_SYSTEM_METRICS,
     ENDPOINT_SYSTEM_PRUNE,
     ENDPOINT_SYSTEM_VACUUM,
+    LONG_OPERATION_TIMEOUT,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def has_scope(granted_scopes: list[str], target: str) -> bool:
+    """Check if target scope is covered by granted scopes."""
+    if "*" in granted_scopes:
+        return True
+    category = target.split(":")[0]
+    if f"{category}:*" in granted_scopes:
+        return True
+    return target in granted_scopes
 
 
 class LogShedError(HomeAssistantError):
@@ -28,6 +40,17 @@ class LogShedError(HomeAssistantError):
 
 class LogShedCannotConnect(LogShedError):
     """Exception raised when unable to connect to LogShed."""
+
+
+class LogShedOperationTimeout(LogShedError):
+    """Exception raised when a long-running operation does not answer in time.
+
+    The request reached LogShed, so the operation may still be running on the server.
+    """
+
+
+class LogShedNotFound(LogShedError):
+    """Exception raised when the requested resource does not exist (404)."""
 
 
 class LogShedInvalidAuth(LogShedError):
@@ -47,7 +70,7 @@ class LogShedRateLimited(LogShedError):
 
 
 class LogShedBadRequest(LogShedError):
-    """Exception raised when a bad request is submitted (400)."""
+    """Exception raised when a bad request is submitted (400 or 422)."""
 
 
 class LogShedServerError(LogShedError):
@@ -88,7 +111,7 @@ class LogShedMetrics:
     queue_depth: int
     dropped_logs: int
     dropped_by_filter: int
-    db_size_mb: float
+    udp_receive_errors: int | None
     db_size_bytes: int
     total_logs_count: int
     disk_free_bytes: int
@@ -104,6 +127,7 @@ class LogShedMetrics:
     def from_dict(cls, data: dict[str, Any]) -> LogShedMetrics:
         """Create LogShedMetrics from API response dictionary."""
         top_err = data.get("top_error_breakdown") or {}
+        udp_errors = data.get("udp_receive_errors")
         alert = data.get("alert_state") or {}
         maint = data.get("maintenance") or {}
         severity = data.get("severity_counts_24h") or {}
@@ -138,7 +162,7 @@ class LogShedMetrics:
             queue_depth=int(data.get("queue_depth", 0)),
             dropped_logs=int(data.get("dropped_logs", 0)),
             dropped_by_filter=int(data.get("dropped_by_filter", 0)),
-            db_size_mb=float(data.get("db_size_mb", 0.0)),
+            udp_receive_errors=int(udp_errors) if udp_errors is not None else None,
             db_size_bytes=int(data.get("db_size_bytes", 0)),
             total_logs_count=int(data.get("total_logs_count", 0)),
             disk_free_bytes=int(data.get("disk_free_bytes", 0)),
@@ -175,16 +199,36 @@ class LogShedApiClient:
             "Content-Type": "application/json",
         }
 
+    @staticmethod
+    async def _error_detail(response: aiohttp.ClientResponse, default: str) -> str:
+        """Return the FastAPI error detail of a response, or a default message.
+
+        Validation errors (422) carry a list of {loc, msg} objects; their messages are joined.
+        """
+        try:
+            body = await response.json()
+        except Exception:
+            return default
+        detail = body.get("detail") if isinstance(body, dict) else None
+        if isinstance(detail, list):
+            messages = [str(item.get("msg")) for item in detail if isinstance(item, dict)]
+            messages = [msg for msg in messages if msg and msg != "None"]
+            return "; ".join(messages) or default
+        if detail:
+            return str(detail)
+        return default
+
     async def _request(
         self,
         method: str,
         endpoint: str,
         json_data: dict[str, Any] | None = None,
+        timeout: float = DEFAULT_REQUEST_TIMEOUT,
     ) -> dict[str, Any]:
         """Send an asynchronous HTTP request to LogShed."""
         url = f"{self.host}{endpoint}"
         try:
-            async with asyncio.timeout(15):
+            async with asyncio.timeout(timeout):
                 response = await self.session.request(
                     method=method,
                     url=url,
@@ -193,59 +237,51 @@ class LogShedApiClient:
                     ssl=self.verify_ssl,
                 )
 
-                if response.status in (401, 403):
-                    error_detail = "Invalid or expired API token"
-                    try:
-                        body = await response.json()
-                        error_detail = body.get("detail", error_detail)
-                    except Exception:
-                        pass
-                    raise LogShedInvalidAuth(error_detail)
+                status = response.status
+                if status in (401, 403):
+                    raise LogShedInvalidAuth(
+                        await self._error_detail(response, "Invalid or expired API token")
+                    )
 
-                if response.status == 409:
-                    error_detail = "Operation conflict"
-                    try:
-                        body = await response.json()
-                        error_detail = body.get("detail", error_detail)
-                    except Exception:
-                        pass
-                    raise LogShedConflict(error_detail)
+                if status == 404:
+                    raise LogShedNotFound(await self._error_detail(response, "Not found"))
 
-                if response.status == 429:
-                    error_detail = "Too many requests"
+                if status == 409:
+                    raise LogShedConflict(await self._error_detail(response, "Operation conflict"))
+
+                if status == 429:
                     retry_after = None
-                    try:
-                        retry_after_hdr = response.headers.get("Retry-After")
-                        if retry_after_hdr:
+                    retry_after_hdr = response.headers.get("Retry-After")
+                    if retry_after_hdr:
+                        try:
                             retry_after = int(retry_after_hdr)
-                        body = await response.json()
-                        error_detail = body.get("detail", error_detail)
-                    except Exception:
-                        pass
-                    raise LogShedRateLimited(error_detail, retry_after=retry_after)
+                        except ValueError:
+                            retry_after = None
+                    raise LogShedRateLimited(
+                        await self._error_detail(response, "Too many requests"),
+                        retry_after=retry_after,
+                    )
 
-                if response.status == 400:
-                    error_detail = "Bad request"
-                    try:
-                        body = await response.json()
-                        error_detail = body.get("detail", error_detail)
-                    except Exception:
-                        pass
-                    raise LogShedBadRequest(error_detail)
+                if status in (400, 422):
+                    raise LogShedBadRequest(await self._error_detail(response, "Bad request"))
 
-                if response.status >= 500:
-                    error_detail = f"Server error: {response.status}"
-                    try:
-                        body = await response.json()
-                        error_detail = body.get("detail", error_detail)
-                    except Exception:
-                        pass
-                    raise LogShedServerError(error_detail)
+                if status >= 500:
+                    raise LogShedServerError(
+                        await self._error_detail(response, f"Server error: {status}")
+                    )
 
-                response.raise_for_status()
+                if status >= 400:
+                    detail = await self._error_detail(response, "Request rejected")
+                    raise LogShedError(f"LogShed returned HTTP {status}: {detail}")
+
                 return await response.json()
 
         except TimeoutError as err:
+            if timeout > DEFAULT_REQUEST_TIMEOUT:
+                raise LogShedOperationTimeout(
+                    f"LogShed did not answer within {round(timeout / 60)} minutes; "
+                    "the operation may still be running on the server"
+                ) from err
             raise LogShedCannotConnect(f"Timeout connecting to LogShed at {self.host}") from err
         except aiohttp.ClientSSLError as err:
             raise LogShedCannotConnect(
@@ -307,8 +343,8 @@ class LogShedApiClient:
 
     async def async_trigger_prune(self) -> dict[str, Any]:
         """Trigger database retention prune and compaction."""
-        return await self._request("POST", ENDPOINT_SYSTEM_PRUNE)
+        return await self._request("POST", ENDPOINT_SYSTEM_PRUNE, timeout=LONG_OPERATION_TIMEOUT)
 
     async def async_trigger_vacuum(self) -> dict[str, Any]:
         """Trigger database VACUUM operation."""
-        return await self._request("POST", ENDPOINT_SYSTEM_VACUUM)
+        return await self._request("POST", ENDPOINT_SYSTEM_VACUUM, timeout=LONG_OPERATION_TIMEOUT)

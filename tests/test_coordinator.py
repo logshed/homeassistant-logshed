@@ -40,7 +40,7 @@ async def test_coordinator_update_success(
 
     assert coordinator.last_update_success is True
     assert coordinator.data == mock_metrics
-    assert coordinator.data.server_name == "TestShed"
+    assert coordinator.data.server_name == "LogShed"
     assert coordinator.data.ingest_rate == 42.5
 
 
@@ -82,7 +82,7 @@ async def test_coordinator_custom_scan_interval(
     entry = MockConfigEntry(
         domain=DOMAIN,
         unique_id=MOCK_INSTANCE_ID,
-        title="LogShed (TestShed)",
+        title="LogShed (LogShed)",
         data={
             CONF_HOST: MOCK_HOST,
             CONF_API_TOKEN: MOCK_TOKEN,

@@ -12,14 +12,12 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import LogShedMetrics
-from .const import DOMAIN
-from .coordinator import LogShedDataUpdateCoordinator
+from .coordinator import LogShedConfigEntry, LogShedDataUpdateCoordinator
 from .entity import LogShedEntity
 
 
@@ -44,7 +42,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         key="error_or_worse_logs_24h",
         translation_key="error_or_worse_logs_24h",
         icon="mdi:alert-circle-outline",
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="logs",
         value_fn=lambda metrics: metrics.error_count_24h,
         extra_attrs_fn=lambda metrics: {
@@ -56,7 +54,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         key="error_or_worse_logs_1h",
         translation_key="error_or_worse_logs_1h",
         icon="mdi:alert-circle",
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="logs",
         value_fn=lambda metrics: metrics.error_count_1h,
         extra_attrs_fn=lambda metrics: {
@@ -68,7 +66,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         key="emergency_logs_24h",
         translation_key="emergency_logs_24h",
         icon="mdi:alarm-light",
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="logs",
         value_fn=lambda metrics: metrics.emergency_logs_24h,
     ),
@@ -76,7 +74,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         key="alert_logs_24h",
         translation_key="alert_logs_24h",
         icon="mdi:bell-alert",
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="logs",
         value_fn=lambda metrics: metrics.alert_logs_24h,
     ),
@@ -84,7 +82,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         key="critical_logs_24h",
         translation_key="critical_logs_24h",
         icon="mdi:alert-octagon",
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="logs",
         value_fn=lambda metrics: metrics.critical_logs_24h,
     ),
@@ -92,7 +90,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         key="error_logs_24h",
         translation_key="error_logs_24h",
         icon="mdi:close-circle-outline",
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="logs",
         value_fn=lambda metrics: metrics.error_logs_24h,
     ),
@@ -100,7 +98,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         key="warning_logs_24h",
         translation_key="warning_logs_24h",
         icon="mdi:alert-outline",
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="logs",
         value_fn=lambda metrics: metrics.warning_logs_24h,
     ),
@@ -119,8 +117,10 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         icon="mdi:database-outline",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.DATA_SIZE,
-        native_unit_of_measurement=UnitOfInformation.MEGABYTES,
-        value_fn=lambda metrics: metrics.db_size_mb,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.MEGABYTES,
+        suggested_display_precision=1,
+        value_fn=lambda metrics: metrics.db_size_bytes,
     ),
     LogShedSensorEntityDescription(
         key="disk_free",
@@ -129,8 +129,10 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         icon="mdi:harddisk",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.DATA_SIZE,
-        native_unit_of_measurement=UnitOfInformation.GIGABYTES,
-        value_fn=lambda metrics: round(metrics.disk_free_bytes / (1024**3), 2),
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        suggested_display_precision=2,
+        value_fn=lambda metrics: metrics.disk_free_bytes,
     ),
     LogShedSensorEntityDescription(
         key="disk_used_percent",
@@ -169,6 +171,15 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         value_fn=lambda metrics: metrics.dropped_by_filter,
     ),
     LogShedSensorEntityDescription(
+        key="udp_lost",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        translation_key="udp_lost",
+        icon="mdi:lan-disconnect",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement="datagrams",
+        value_fn=lambda metrics: metrics.udp_receive_errors,
+    ),
+    LogShedSensorEntityDescription(
         key="maintenance_remaining",
         translation_key="maintenance_remaining",
         icon="mdi:clock-end",
@@ -182,11 +193,11 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: LogShedConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up LogShed sensor entities based on a config entry."""
-    coordinator: LogShedDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data.coordinator
     async_add_entities(
         LogShedSensorEntity(coordinator, description) for description in SENSOR_DESCRIPTIONS
     )

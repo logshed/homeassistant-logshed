@@ -62,7 +62,7 @@ async def test_user_flow_success(hass: HomeAssistant, mock_metrics: LogShedMetri
             },
         )
         assert result2["type"] == FlowResultType.CREATE_ENTRY
-        assert result2["title"] == "LogShed (TestShed)"
+        assert result2["title"] == "LogShed (LogShed)"
         assert result2["data"] == {
             CONF_HOST: MOCK_HOST,
             CONF_API_TOKEN: MOCK_TOKEN,
@@ -199,6 +199,43 @@ async def test_user_flow_duplicate_aborted(
         assert result2["reason"] == "already_configured"
 
 
+def _patch_client(auth_info: LogShedAuthInfo, metrics: LogShedMetrics):
+    """Patch the config flow's API client calls."""
+    return (
+        patch(
+            "custom_components.logshed.config_flow.LogShedApiClient.async_verify_auth",
+            AsyncMock(return_value=auth_info),
+        ),
+        patch(
+            "custom_components.logshed.config_flow.LogShedApiClient.async_get_system_metrics",
+            AsyncMock(return_value=metrics),
+        ),
+    )
+
+
+FULL_AUTH = LogShedAuthInfo(valid=True, name="Test Token", scopes=["*"], expires_at=None)
+
+
+async def test_user_flow_known_instance_updates_host(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_metrics: LogShedMetrics
+) -> None:
+    """Test adding a configured instance at a new address updates the existing entry."""
+    mock_config_entry.add_to_hass(hass)
+    verify, metrics = _patch_client(FULL_AUTH, mock_metrics)
+    with verify, metrics, patch.object(hass.config_entries, "async_schedule_reload"):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_HOST: "https://logshed.lan", CONF_API_TOKEN: MOCK_TOKEN, CONF_VERIFY_SSL: False},
+        )
+    assert result2["type"] == FlowResultType.ABORT
+    assert result2["reason"] == "already_configured"
+    assert mock_config_entry.data[CONF_HOST] == "https://logshed.lan"
+    assert mock_config_entry.data[CONF_VERIFY_SSL] is False
+
+
 async def test_reauth_flow_success(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_metrics: LogShedMetrics
 ) -> None:
@@ -206,32 +243,13 @@ async def test_reauth_flow_success(
     mock_config_entry.add_to_hass(hass)
     new_token = "ls_live_newupdatedtoken987654321"
 
-    auth_info = LogShedAuthInfo(
-        valid=True,
-        name="Updated Token",
-        scopes=["*"],
-        expires_at=None,
-    )
-
+    verify, metrics = _patch_client(FULL_AUTH, mock_metrics)
     with (
-        patch(
-            "custom_components.logshed.config_flow.LogShedApiClient.async_verify_auth",
-            AsyncMock(return_value=auth_info),
-        ),
-        patch(
-            "custom_components.logshed.config_flow.LogShedApiClient.async_get_system_metrics",
-            AsyncMock(return_value=mock_metrics),
-        ),
-        patch.object(hass.config_entries, "async_reload", AsyncMock()) as mock_reload,
+        verify,
+        metrics,
+        patch.object(hass.config_entries, "async_schedule_reload") as mock_reload,
     ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={
-                "source": config_entries.SOURCE_REAUTH,
-                "entry_id": mock_config_entry.entry_id,
-            },
-            data=mock_config_entry.data,
-        )
+        result = await mock_config_entry.start_reauth_flow(hass)
         assert result["type"] == FlowResultType.FORM
         assert result["step_id"] == "reauth_confirm"
 
@@ -239,10 +257,90 @@ async def test_reauth_flow_success(
             result["flow_id"],
             {CONF_API_TOKEN: new_token},
         )
-        assert result2["type"] == FlowResultType.ABORT
-        assert result2["reason"] == "reauth_successful"
-        assert mock_config_entry.data[CONF_API_TOKEN] == new_token
-        mock_reload.assert_awaited_once_with(mock_config_entry.entry_id)
+    assert result2["type"] == FlowResultType.ABORT
+    assert result2["reason"] == "reauth_successful"
+    assert mock_config_entry.data[CONF_API_TOKEN] == new_token
+    mock_reload.assert_called_once_with(mock_config_entry.entry_id)
+
+
+async def test_reauth_flow_wrong_instance(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_metrics: LogShedMetrics
+) -> None:
+    """Test reauth aborts when the token belongs to a different LogShed instance."""
+    mock_config_entry.add_to_hass(hass)
+    mock_metrics.instance_id = "other-instance"
+
+    verify, metrics = _patch_client(FULL_AUTH, mock_metrics)
+    with verify, metrics:
+        result = await mock_config_entry.start_reauth_flow(hass)
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_API_TOKEN: "ls_live_othertoken"}
+        )
+    assert result2["type"] == FlowResultType.ABORT
+    assert result2["reason"] == "wrong_instance"
+    assert mock_config_entry.data[CONF_API_TOKEN] == MOCK_TOKEN
+
+
+async def test_reconfigure_flow_success(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_metrics: LogShedMetrics
+) -> None:
+    """Test reconfigure changes the host and SSL verification."""
+    mock_config_entry.add_to_hass(hass)
+
+    verify, metrics = _patch_client(FULL_AUTH, mock_metrics)
+    with (
+        verify,
+        metrics,
+        patch.object(hass.config_entries, "async_schedule_reload") as mock_reload,
+    ):
+        result = await mock_config_entry.start_reconfigure_flow(hass)
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "reconfigure"
+
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_HOST: "logshed.lan:8000/", CONF_VERIFY_SSL: False}
+        )
+    assert result2["type"] == FlowResultType.ABORT
+    assert result2["reason"] == "reconfigure_successful"
+    assert mock_config_entry.data[CONF_HOST] == "http://logshed.lan:8000"
+    assert mock_config_entry.data[CONF_VERIFY_SSL] is False
+    assert mock_config_entry.data[CONF_API_TOKEN] == MOCK_TOKEN
+    mock_reload.assert_called_once_with(mock_config_entry.entry_id)
+
+
+async def test_reconfigure_flow_wrong_instance(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_metrics: LogShedMetrics
+) -> None:
+    """Test reconfigure aborts when the new host is a different LogShed instance."""
+    mock_config_entry.add_to_hass(hass)
+    mock_metrics.instance_id = "other-instance"
+
+    verify, metrics = _patch_client(FULL_AUTH, mock_metrics)
+    with verify, metrics:
+        result = await mock_config_entry.start_reconfigure_flow(hass)
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_HOST: "http://10.0.0.5:8000", CONF_VERIFY_SSL: True}
+        )
+    assert result2["type"] == FlowResultType.ABORT
+    assert result2["reason"] == "wrong_instance"
+    assert mock_config_entry.data[CONF_HOST] == MOCK_HOST
+
+
+async def test_reconfigure_flow_cannot_connect(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """Test reconfigure shows an error when the new host cannot be reached."""
+    mock_config_entry.add_to_hass(hass)
+    with patch(
+        "custom_components.logshed.config_flow.LogShedApiClient.async_verify_auth",
+        AsyncMock(side_effect=LogShedCannotConnect("refused")),
+    ):
+        result = await mock_config_entry.start_reconfigure_flow(hass)
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_HOST: "http://10.0.0.5:8000", CONF_VERIFY_SSL: True}
+        )
+    assert result2["type"] == FlowResultType.FORM
+    assert result2["errors"] == {"base": "cannot_connect"}
 
 
 async def test_options_flow(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> None:

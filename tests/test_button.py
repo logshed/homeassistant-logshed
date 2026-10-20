@@ -13,10 +13,14 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.logshed.api import (
     LogShedApiClient,
+    LogShedAuthInfo,
     LogShedBadRequest,
     LogShedConflict,
+    LogShedOperationTimeout,
     LogShedRateLimited,
 )
+
+from .conftest import setup_integration
 
 
 async def test_button_press_success(
@@ -152,3 +156,46 @@ async def test_vacuum_button_errors(
             {"entity_id": "button.logshed_vacuum_database"},
             blocking=True,
         )
+
+
+async def test_buttons_report_operation_still_running(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """Test a timed-out prune or vacuum says the operation may still be running."""
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.BUTTON])
+
+    mock_api_client.async_trigger_prune = AsyncMock(side_effect=LogShedOperationTimeout("slow"))
+    mock_api_client.async_trigger_vacuum = AsyncMock(side_effect=LogShedOperationTimeout("slow"))
+    for entity_id, label in (
+        ("button.logshed_prune_database", "Prune"),
+        ("button.logshed_vacuum_database", "Vacuum"),
+    ):
+        with pytest.raises(
+            HomeAssistantError,
+            match=f"{label} did not finish within 10 minutes and may still be running",
+        ):
+            await hass.services.async_call(
+                BUTTON_DOMAIN, "press", {"entity_id": entity_id}, blocking=True
+            )
+
+
+async def test_buttons_not_created_without_system_write(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """Test the prune and vacuum buttons need the system:write scope."""
+    mock_api_client.async_verify_auth = AsyncMock(
+        return_value=LogShedAuthInfo(
+            valid=True,
+            name="Read only",
+            scopes=["system:read", "maintenance:write"],
+            expires_at=None,
+        )
+    )
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.BUTTON])
+
+    assert hass.states.get("button.logshed_prune_database") is None
+    assert hass.states.get("button.logshed_vacuum_database") is None

@@ -36,20 +36,25 @@ DEFAULT_MAINTENANCE_LOG_HANDLING: Final = "silence_alerts"
 LOG_HANDLING_SILENCE_ALERTS: Final = "silence_alerts"
 LOG_HANDLING_DROP_ERRORS: Final = "drop_errors"
 
-# Required and optional API scopes
-REQUIRED_SCOPES: Final = {"system:read"}
-OPTIONAL_MAINTENANCE_SCOPES: Final = {"maintenance:write"}
-OPTIONAL_SYSTEM_WRITE_SCOPES: Final = {"system:write"}
+# Request timeouts (seconds). LogShed runs prune and vacuum inside the request, and a
+# vacuum of a multi-GB database can take minutes.
+DEFAULT_REQUEST_TIMEOUT: Final = 15
+LONG_OPERATION_TIMEOUT: Final = 600
+
+# API scopes
+SCOPE_SYSTEM_READ: Final = "system:read"
+SCOPE_SYSTEM_WRITE: Final = "system:write"
+SCOPE_MAINTENANCE_WRITE: Final = "maintenance:write"
 
 # API Endpoints
 ENDPOINT_AUTH_VERIFY: Final = "/api/v1/auth/verify"
 ENDPOINT_SYSTEM_METRICS: Final = "/api/v1/system/metrics"
 ENDPOINT_MAINTENANCE_ENABLE: Final = "/api/v1/maintenance/enable"
 ENDPOINT_MAINTENANCE_DISABLE: Final = "/api/v1/maintenance/disable"
-ENDPOINT_MAINTENANCE_STATUS: Final = "/api/v1/maintenance/status"
 ENDPOINT_SYSTEM_PRUNE: Final = "/api/v1/system/prune"
 ENDPOINT_SYSTEM_VACUUM: Final = "/api/v1/system/vacuum"
 
 # Services
 SERVICE_ENABLE_MAINTENANCE: Final = "enable_maintenance"
 SERVICE_DISABLE_MAINTENANCE: Final = "disable_maintenance"
+ATTR_CONFIG_ENTRY_ID: Final = "config_entry_id"

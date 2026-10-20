@@ -1,7 +1,14 @@
 enable_maintenance:
   name: Enable Maintenance Window
-  description: Starts an on-demand LogShed maintenance window to silence alerts and optionally drop error logs.
+  description: Starts an on-demand LogShed maintenance window to silence alerts and optionally drop error logs. Returns the session ID of each window it starts.
   fields:
+    config_entry_id:
+      name: LogShed Instance
+      description: The LogShed instance to start the window on. Starts one window on every loaded instance if omitted.
+      required: false
+      selector:
+        config_entry:
+          integration: logshed
     duration_minutes:
       name: Duration (Minutes)
       description: Length of the maintenance session in minutes.
@@ -47,11 +54,18 @@ enable_maintenance:
 
 disable_maintenance:
   name: Disable Maintenance Window
-  description: Terminates active LogShed maintenance windows.
+  description: Ends LogShed maintenance windows. Pass the session ID returned by Enable Maintenance Window to end only that window; without a session ID, every on-demand window is ended, including windows started from the LogShed web UI, MCP clients or other automations. Scheduled windows are never ended.
   fields:
+    config_entry_id:
+      name: LogShed Instance
+      description: The LogShed instance to end windows on. Applies to every loaded instance if omitted.
+      required: false
+      selector:
+        config_entry:
+          integration: logshed
     session_id:
       name: Session ID
-      description: Optional specific maintenance session ID to terminate. Clears all active on-demand sessions if omitted.
+      description: The maintenance session to end, as returned by Enable Maintenance Window. If omitted, every active on-demand session is ended.
       required: false
       selector:
         text:

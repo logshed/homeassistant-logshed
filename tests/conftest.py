@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -16,7 +16,8 @@ except Exception:
     pass
 
 
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, Platform
+from homeassistant.core import HomeAssistant
 
 from custom_components.logshed.api import LogShedApiClient, LogShedAuthInfo, LogShedMetrics
 from custom_components.logshed.const import (
@@ -26,11 +27,13 @@ from custom_components.logshed.const import (
     CONF_SCAN_INTERVAL,
     CONF_VERIFY_SSL,
     DOMAIN,
+    PLATFORMS,
 )
 
 MOCK_HOST = "http://192.168.1.100:8000"
 MOCK_TOKEN = "ls_live_testsecrettoken123456789"
 MOCK_INSTANCE_ID = "12345678-1234-5678-1234-567812345678"
+MOCK_SESSION_UNTIL = "2099-01-01T00:00:00+00:00"
 
 MOCK_AUTH_VERIFY_RESPONSE: dict[str, Any] = {
     "valid": True,
@@ -43,7 +46,7 @@ MOCK_SYSTEM_METRICS_RESPONSE: dict[str, Any] = {
     "status": "ok",
     "version": "1.3.0",
     "instance_id": MOCK_INSTANCE_ID,
-    "server_name": "TestShed",
+    "server_name": "LogShed",
     "ingest_rate": 42.5,
     "error_count_24h": 17,
     "error_count_1h": 3,
@@ -73,8 +76,8 @@ MOCK_SYSTEM_METRICS_RESPONSE: dict[str, Any] = {
     "queue_depth": 5,
     "dropped_logs": 10,
     "dropped_by_filter": 25,
+    "udp_receive_errors": 7,
     "db_size_bytes": 104857600,
-    "db_size_mb": 100.0,
     "total_logs_count": 500000,
     "disk_free_bytes": 107374182400,  # 100 GB
     "disk_total_bytes": 214748364800,  # 200 GB
@@ -118,7 +121,7 @@ def mock_config_entry() -> MockConfigEntry:
     return MockConfigEntry(
         domain=DOMAIN,
         unique_id=MOCK_INSTANCE_ID,
-        title="LogShed (TestShed)",
+        title="LogShed (LogShed)",
         data={
             CONF_HOST: MOCK_HOST,
             CONF_API_TOKEN: MOCK_TOKEN,
@@ -145,7 +148,9 @@ def mock_api_client(
     )
     client.async_verify_auth = AsyncMock(return_value=mock_auth_info)
     client.async_get_system_metrics = AsyncMock(return_value=mock_metrics)
-    client.async_enable_maintenance = AsyncMock(return_value={"id": "sess-123", "active": True})
+    client.async_enable_maintenance = AsyncMock(
+        return_value={"session_id": "sess-123", "active": True, "until": MOCK_SESSION_UNTIL}
+    )
     client.async_disable_maintenance = AsyncMock(
         return_value={"active": False, "terminated_sessions": 1}
     )
@@ -154,3 +159,19 @@ def mock_api_client(
         return_value={"status": "ok", "reclaimed_bytes": 20971520}
     )
     return client
+
+
+async def setup_integration(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    client: LogShedApiClient,
+    platforms: list[Platform] | None = None,
+) -> None:
+    """Set up the LogShed config entry with a mocked API client."""
+    entry.add_to_hass(hass)
+    with (
+        patch("custom_components.logshed.LogShedApiClient", return_value=client),
+        patch("custom_components.logshed.PLATFORMS", platforms or PLATFORMS),
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()

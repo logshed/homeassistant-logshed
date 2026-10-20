@@ -11,13 +11,12 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import LogShedMetrics
-from .const import DOMAIN
-from .coordinator import LogShedDataUpdateCoordinator
+from .coordinator import LogShedConfigEntry, LogShedDataUpdateCoordinator
 from .entity import LogShedEntity
 
 
@@ -27,6 +26,8 @@ class LogShedBinarySensorEntityDescription(BinarySensorEntityDescription):
 
     is_on_fn: Callable[[LogShedDataUpdateCoordinator], bool | None]
     extra_attrs_fn: Callable[[LogShedMetrics], dict[str, Any]] | None = None
+    # Stay available when polling fails, so the failure shows as off instead of unavailable
+    always_available: bool = False
 
 
 BINARY_SENSOR_DESCRIPTIONS: tuple[LogShedBinarySensorEntityDescription, ...] = (
@@ -60,19 +61,21 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[LogShedBinarySensorEntityDescription, ...] = (
         key="connectivity",
         translation_key="connectivity",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:server-network",
         is_on_fn=lambda coordinator: coordinator.last_update_success,
+        always_available=True,
     ),
 )
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: LogShedConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up LogShed binary sensor entities based on a config entry."""
-    coordinator: LogShedDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data.coordinator
     async_add_entities(
         LogShedBinarySensorEntity(coordinator, description)
         for description in BINARY_SENSOR_DESCRIPTIONS
@@ -92,6 +95,11 @@ class LogShedBinarySensorEntity(LogShedEntity, BinarySensorEntity):
         """Initialize the binary sensor."""
         super().__init__(coordinator, description.key)
         self.entity_description = description
+
+    @property
+    def available(self) -> bool:
+        """Return True if the entity is available."""
+        return self.entity_description.always_available or super().available
 
     @property
     def is_on(self) -> bool | None:

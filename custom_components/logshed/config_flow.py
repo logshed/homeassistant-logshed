@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlparse
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     BooleanSelector,
@@ -31,6 +31,7 @@ from .api import (
     LogShedCannotConnect,
     LogShedInvalidAuth,
     LogShedMetrics,
+    has_scope,
 )
 from .const import (
     CONF_API_TOKEN,
@@ -49,19 +50,12 @@ from .const import (
     MAX_SCAN_INTERVAL,
     MIN_MAINTENANCE_DURATION,
     MIN_SCAN_INTERVAL,
+    SCOPE_MAINTENANCE_WRITE,
+    SCOPE_SYSTEM_READ,
+    SCOPE_SYSTEM_WRITE,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _has_scope(granted_scopes: list[str], target: str) -> bool:
-    """Check if target scope is covered by granted scopes."""
-    if "*" in granted_scopes:
-        return True
-    category = target.split(":")[0]
-    if f"{category}:*" in granted_scopes:
-        return True
-    return target in granted_scopes
 
 
 def _normalize_host(host: str) -> str:
@@ -79,10 +73,6 @@ class LogShedConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for LogShed."""
 
     VERSION = 1
-
-    def __init__(self) -> None:
-        """Initialize config flow."""
-        self._reauth_entry: ConfigEntry | None = None
 
     @staticmethod
     @callback
@@ -105,18 +95,22 @@ class LogShedConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # 1. Verify token & scopes
         auth_info = await client.async_verify_auth()
-        if not auth_info.valid or not _has_scope(auth_info.scopes, "system:read"):
-            raise LogShedInvalidAuth("Token does not have required 'system:read' scope")
+        if not auth_info.valid or not has_scope(auth_info.scopes, SCOPE_SYSTEM_READ):
+            raise LogShedInvalidAuth(f"Token does not have required '{SCOPE_SYSTEM_READ}' scope")
 
-        if not _has_scope(auth_info.scopes, "maintenance:write"):
+        if not has_scope(auth_info.scopes, SCOPE_MAINTENANCE_WRITE):
             _LOGGER.warning(
-                "LogShed token '%s' is missing 'maintenance:write' scope; maintenance controls will be unavailable",
+                "LogShed token '%s' is missing the '%s' scope; the Quick Maintenance switch will not "
+                "be created and the maintenance service actions will fail",
                 auth_info.name,
+                SCOPE_MAINTENANCE_WRITE,
             )
-        if not _has_scope(auth_info.scopes, "system:write"):
+        if not has_scope(auth_info.scopes, SCOPE_SYSTEM_WRITE):
             _LOGGER.warning(
-                "LogShed token '%s' is missing 'system:write' scope; prune and vacuum buttons will be unavailable",
+                "LogShed token '%s' is missing the '%s' scope; the prune and vacuum buttons "
+                "will not be created",
                 auth_info.name,
+                SCOPE_SYSTEM_WRITE,
             )
 
         # 2. Fetch system metrics to retrieve instance_id and server_name
@@ -131,7 +125,7 @@ class LogShedConfigFlow(ConfigFlow, domain=DOMAIN):
         }
         return normalized_data, metrics
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -150,7 +144,13 @@ class LogShedConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 unique_id = metrics.instance_id or normalized_data[CONF_HOST]
                 await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
+                # A known instance at a new address keeps its entry and history
+                self._abort_if_unique_id_configured(
+                    updates={
+                        CONF_HOST: normalized_data[CONF_HOST],
+                        CONF_VERIFY_SSL: normalized_data[CONF_VERIFY_SSL],
+                    }
+                )
 
                 title = f"LogShed ({metrics.server_name})"
                 options = {
@@ -197,26 +197,77 @@ class LogShedConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Change the host URL or SSL verification of an existing entry."""
+        errors: dict[str, str] = {}
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            new_data = {
+                **entry.data,
+                CONF_HOST: user_input[CONF_HOST],
+                CONF_VERIFY_SSL: user_input[CONF_VERIFY_SSL],
+            }
+            try:
+                normalized_data, metrics = await self._validate_input(new_data)
+            except ValueError:
+                errors["base"] = "invalid_host"
+            except LogShedInvalidAuth:
+                errors["base"] = "invalid_auth"
+            except LogShedCannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected exception during LogShed reconfigure")
+                errors["base"] = "unknown"
+            else:
+                await self.async_set_unique_id(metrics.instance_id)
+                self._abort_if_unique_id_mismatch(reason="wrong_instance")
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        CONF_HOST: normalized_data[CONF_HOST],
+                        CONF_VERIFY_SSL: normalized_data[CONF_VERIFY_SSL],
+                    },
+                )
+
+        current = user_input or entry.data
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_HOST, default=current.get(CONF_HOST, "")): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.URL)
+                ),
+                vol.Required(
+                    CONF_VERIFY_SSL,
+                    default=current.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+                ): BooleanSelector(),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
         """Perform reauth upon an API authentication failure."""
-        self._reauth_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Dialog that prompts user for new API token."""
         errors: dict[str, str] = {}
-        entry = self._reauth_entry or self.hass.config_entries.async_get_entry(
-            self.context["entry_id"]
-        )
+        entry = self._get_reauth_entry()
 
-        if user_input is not None and entry is not None:
+        if user_input is not None:
             new_data = dict(entry.data)
             new_data[CONF_API_TOKEN] = user_input[CONF_API_TOKEN].strip()
 
             try:
-                _, _ = await self._validate_input(new_data)
+                _, metrics = await self._validate_input(new_data)
             except LogShedInvalidAuth:
                 errors["base"] = "invalid_auth"
             except LogShedCannotConnect:
@@ -225,9 +276,11 @@ class LogShedConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception during reauth")
                 errors["base"] = "unknown"
             else:
-                self.hass.config_entries.async_update_entry(entry, data=new_data)
-                await self.hass.config_entries.async_reload(entry.entry_id)
-                return self.async_abort(reason="reauth_successful")
+                await self.async_set_unique_id(metrics.instance_id)
+                self._abort_if_unique_id_mismatch(reason="wrong_instance")
+                return self.async_update_reload_and_abort(
+                    entry, data_updates={CONF_API_TOKEN: new_data[CONF_API_TOKEN]}
+                )
 
         schema = vol.Schema(
             {
@@ -247,12 +300,7 @@ class LogShedConfigFlow(ConfigFlow, domain=DOMAIN):
 class LogShedOptionsFlowHandler(OptionsFlow):
     """Handle options flow for LogShed integration."""
 
-    def __init__(self, config_entry: ConfigEntry | None = None) -> None:
-        """Initialize LogShed options flow."""
-        if config_entry is not None:
-            self._config_entry = config_entry
-
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
