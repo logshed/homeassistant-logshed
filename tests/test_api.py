@@ -20,6 +20,7 @@ from custom_components.logshed.api import (
     LogShedOperationTimeout,
     LogShedRateLimited,
     LogShedServerError,
+    LogShedVersion,
 )
 from custom_components.logshed.const import DEFAULT_REQUEST_TIMEOUT, LONG_OPERATION_TIMEOUT
 
@@ -28,6 +29,7 @@ from .conftest import (
     MOCK_HOST,
     MOCK_SYSTEM_METRICS_RESPONSE,
     MOCK_TOKEN,
+    MOCK_VERSION_RESPONSE,
 )
 
 
@@ -271,3 +273,29 @@ def test_metrics_udp_receive_errors() -> None:
     assert LogShedMetrics.from_dict(MOCK_SYSTEM_METRICS_RESPONSE).udp_receive_errors == 7
     data = {**MOCK_SYSTEM_METRICS_RESPONSE, "udp_receive_errors": None}
     assert LogShedMetrics.from_dict(data).udp_receive_errors is None
+
+
+async def test_api_get_version() -> None:
+    """Test fetching version information, including a disabled update check."""
+    session = AsyncMock()
+    session.request = AsyncMock(return_value=_mock_response(200, MOCK_VERSION_RESPONSE))
+    client = LogShedApiClient(MOCK_HOST, MOCK_TOKEN, session)
+
+    version = await client.async_get_version()
+    assert version.current_version == "1.3.0"
+    assert version.latest_version == "1.4.0"
+    assert version.update_available is True
+    assert version.check_enabled is True
+    assert session.request.call_args.kwargs["url"] == f"{MOCK_HOST}/api/v1/system/version"
+
+    disabled = {
+        "current_version": "1.3.0",
+        "latest_version": None,
+        "update_available": False,
+        "check_enabled": False,
+        "checked_at": None,
+    }
+    version = LogShedVersion.from_dict(disabled)
+    assert version.latest_version is None
+    assert version.check_enabled is False
+    assert version.checked_at is None

@@ -130,6 +130,11 @@
       "vacuum_database": {
         "name": "Vacuum Database"
       }
+    },
+    "update": {
+      "update": {
+        "name": "Update"
+      }
     }
   },
   "services": {

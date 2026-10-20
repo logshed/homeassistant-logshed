@@ -20,6 +20,7 @@ Connects your Home Assistant instance with your self-hosted [LogShed](https://gi
 - **Incident & Problem Sensors:** Binary problem sensors reflecting LogShed alert rules (ideal for flashing desk lamps red or sending high-priority alerts).
 - **Automated Maintenance Integration:** Native switches and service actions (`logshed.enable_maintenance`, `logshed.disable_maintenance`) for backup hooks (Home Assistant Backups, Proxmox VE backups, restic, Borg) to silence alerts or drop error floods during scheduled backup routines.
 - **Diagnostic Controls:** On-demand database compaction (`VACUUM`) and retention pruning buttons directly within Home Assistant.
+- **Update Notifications:** An update entity shows when a newer stable LogShed release is available.
 - **Diagnostics:** Download config entry diagnostics (API token redacted) from the integration page for troubleshooting.
 
 ---
@@ -68,7 +69,7 @@ Connects your Home Assistant instance with your self-hosted [LogShed](https://gi
 
 | Scope | Adds |
 | :--- | :--- |
-| `system:read` | All sensors and binary sensors (required). |
+| `system:read` | All sensors, binary sensors and the update entity (required). |
 | `maintenance:write` | The Quick Maintenance switch and the `logshed.enable_maintenance` and `logshed.disable_maintenance` actions. Without it the switch is not created and the actions fail with a clear error. |
 | `system:write` | The Prune Database and Vacuum Database buttons. Without it they are not created. |
 
@@ -139,6 +140,12 @@ Server health sensors are in the **Diagnostic** card on the device page, so the 
 | `button.logshed_vacuum_database` | Button | Manually executes a database `VACUUM` to reclaim freelist disk pages. Needs `system:write`. |
 
 Prune and vacuum run inside the request on the LogShed server, and a vacuum of a large database can take minutes. Home Assistant waits up to 10 minutes; if LogShed has not answered by then, the error says the operation may still be running on the server.
+
+### Update
+
+| Entity ID | Description |
+| :--- | :--- |
+| `update.logshed_update` | Shows the installed LogShed version and the latest stable release, with a link to its release notes. **`on`** when a newer stable release is available, using LogShed's own version comparison (a pre-release install is not reported as outdated by an older stable release). Checked once an hour, matching LogShed's cached update check. Unknown when update checks are turned off in LogShed or the last check could not reach the registry. It only reports updates: update LogShed by pulling the new container image. Diagnostic entity; LogShed servers without the version endpoint get no update entity. |
 
 ---
 

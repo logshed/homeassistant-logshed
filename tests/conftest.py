@@ -19,7 +19,12 @@ except Exception:
 from homeassistant.const import CONF_HOST, Platform
 from homeassistant.core import HomeAssistant
 
-from custom_components.logshed.api import LogShedApiClient, LogShedAuthInfo, LogShedMetrics
+from custom_components.logshed.api import (
+    LogShedApiClient,
+    LogShedAuthInfo,
+    LogShedMetrics,
+    LogShedVersion,
+)
 from custom_components.logshed.const import (
     CONF_API_TOKEN,
     CONF_MAINTENANCE_DURATION,
@@ -40,6 +45,15 @@ MOCK_AUTH_VERIFY_RESPONSE: dict[str, Any] = {
     "name": "HA Integration Token",
     "scopes": ["*"],
     "expires_at": None,
+}
+
+MOCK_VERSION_RESPONSE: dict[str, Any] = {
+    "current_version": "1.3.0",
+    "latest_version": "1.4.0",
+    "update_available": True,
+    "check_enabled": True,
+    "checked_at": 1792500000.0,
+    "repo_deprecated": False,
 }
 
 MOCK_SYSTEM_METRICS_RESPONSE: dict[str, Any] = {
@@ -148,6 +162,9 @@ def mock_api_client(
     )
     client.async_verify_auth = AsyncMock(return_value=mock_auth_info)
     client.async_get_system_metrics = AsyncMock(return_value=mock_metrics)
+    client.async_get_version = AsyncMock(
+        return_value=LogShedVersion.from_dict(MOCK_VERSION_RESPONSE)
+    )
     client.async_enable_maintenance = AsyncMock(
         return_value={"session_id": "sess-123", "active": True, "until": MOCK_SESSION_UNTIL}
     )

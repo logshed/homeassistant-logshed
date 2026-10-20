@@ -20,7 +20,12 @@ from .const import (
     PLATFORMS,
     SCOPE_SYSTEM_READ,
 )
-from .coordinator import LogShedConfigEntry, LogShedDataUpdateCoordinator, LogShedRuntimeData
+from .coordinator import (
+    LogShedConfigEntry,
+    LogShedDataUpdateCoordinator,
+    LogShedRuntimeData,
+    LogShedVersionCoordinator,
+)
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,7 +66,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: LogShedConfigEntry) -> b
     coordinator = LogShedDataUpdateCoordinator(hass, api, entry)
     await coordinator.async_config_entry_first_refresh()
 
-    entry.runtime_data = LogShedRuntimeData(coordinator=coordinator, scopes=auth_info.scopes)
+    # A failed first version check (LogShed or GHCR unreachable) must not block setup, so
+    # refresh without raising; only a server without the endpoint gets no update entity.
+    version_coordinator: LogShedVersionCoordinator | None = LogShedVersionCoordinator(
+        hass, api, entry
+    )
+    await version_coordinator.async_refresh()
+    if version_coordinator.endpoint_missing:
+        _LOGGER.info(
+            "LogShed at %s has no /api/v1/system/version endpoint; the update entity "
+            "will not be created",
+            host,
+        )
+        version_coordinator = None
+
+    entry.runtime_data = LogShedRuntimeData(
+        coordinator=coordinator,
+        scopes=auth_info.scopes,
+        version_coordinator=version_coordinator,
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

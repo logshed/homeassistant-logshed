@@ -18,6 +18,7 @@ from .const import (
     ENDPOINT_SYSTEM_METRICS,
     ENDPOINT_SYSTEM_PRUNE,
     ENDPOINT_SYSTEM_VACUUM,
+    ENDPOINT_SYSTEM_VERSION,
     LONG_OPERATION_TIMEOUT,
 )
 
@@ -176,6 +177,29 @@ class LogShedMetrics:
         )
 
 
+@dataclass
+class LogShedVersion:
+    """Parsed version information from /api/v1/system/version."""
+
+    current_version: str
+    latest_version: str | None
+    update_available: bool
+    check_enabled: bool
+    checked_at: float | None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> LogShedVersion:
+        """Create LogShedVersion from API response dictionary."""
+        checked_at = data.get("checked_at")
+        return cls(
+            current_version=str(data.get("current_version", "")),
+            latest_version=data.get("latest_version") or None,
+            update_available=bool(data.get("update_available", False)),
+            check_enabled=bool(data.get("check_enabled", True)),
+            checked_at=float(checked_at) if checked_at is not None else None,
+        )
+
+
 class LogShedApiClient:
     """API client for connecting to LogShed."""
 
@@ -308,6 +332,11 @@ class LogShedApiClient:
         """Fetch system metrics and telemetry from LogShed."""
         data = await self._request("GET", ENDPOINT_SYSTEM_METRICS)
         return LogShedMetrics.from_dict(data)
+
+    async def async_get_version(self) -> LogShedVersion:
+        """Fetch the installed version and the latest stable release from LogShed."""
+        data = await self._request("GET", ENDPOINT_SYSTEM_VERSION)
+        return LogShedVersion.from_dict(data)
 
     async def async_enable_maintenance(
         self,

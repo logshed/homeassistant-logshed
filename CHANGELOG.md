@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `logshed.enable_maintenance`: Start targeted maintenance windows with custom duration, reason, target app/host filters, and log handling modes. Returns the started sessions (`config_entry_id`, `session_id`, `until`) for use with `response_variable`.
   - `logshed.disable_maintenance`: End the session given by `session_id`, or every active on-demand session when omitted.
 - API errors are reported precisely: `404` as not found, `422` validation messages joined into one message, and other `4xx` responses with their status code instead of a network error.
+- Update entity (`update.logshed_update`) showing the installed LogShed version and the latest stable release from `/api/v1/system/version`, with a link to the release notes. It is checked once an hour, follows LogShed's own version comparison, shows unknown when LogShed's update check is off or failed, and is not created for a server without the endpoint.
 - Config entry diagnostics with the API token redacted.
 - Local brand proxy assets (`brand/icon.png`, `brand/logo.png`) complying with Home Assistant 2026.3+ specifications.
 - Full English translations (`strings.json`, `translations/en.json`).

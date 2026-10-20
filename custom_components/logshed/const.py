@@ -13,6 +13,7 @@ PLATFORMS: Final = [
     Platform.BINARY_SENSOR,
     Platform.SWITCH,
     Platform.BUTTON,
+    Platform.UPDATE,
 ]
 
 # Configuration and Option Keys
@@ -25,6 +26,8 @@ CONF_MAINTENANCE_LOG_HANDLING: Final = "default_maintenance_log_handling"
 # Default Values
 DEFAULT_VERIFY_SSL: Final = True
 DEFAULT_SCAN_INTERVAL: Final = 30  # seconds
+# LogShed caches its GHCR update check for 1 hour
+VERSION_SCAN_INTERVAL: Final = 3600  # seconds
 MIN_SCAN_INTERVAL: Final = 10
 MAX_SCAN_INTERVAL: Final = 300
 
@@ -49,6 +52,7 @@ SCOPE_MAINTENANCE_WRITE: Final = "maintenance:write"
 # API Endpoints
 ENDPOINT_AUTH_VERIFY: Final = "/api/v1/auth/verify"
 ENDPOINT_SYSTEM_METRICS: Final = "/api/v1/system/metrics"
+ENDPOINT_SYSTEM_VERSION: Final = "/api/v1/system/version"
 ENDPOINT_MAINTENANCE_ENABLE: Final = "/api/v1/maintenance/enable"
 ENDPOINT_MAINTENANCE_DISABLE: Final = "/api/v1/maintenance/disable"
 ENDPOINT_SYSTEM_PRUNE: Final = "/api/v1/system/prune"

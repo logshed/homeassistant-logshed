@@ -36,7 +36,7 @@ homeassistant-logshed/
 |       |-- button.py            # Diagnostic buttons (prune database, vacuum database)
 |       |-- config_flow.py       # Config flow, options flow, reauth and reconfigure
 |       |-- const.py             # Constants, config keys, defaults
-|       |-- coordinator.py       # LogShedDataUpdateCoordinator (polling /api/v1/system/metrics)
+|       |-- coordinator.py       # Metrics coordinator (/api/v1/system/metrics) and version coordinator (/api/v1/system/version)
 |       |-- diagnostics.py       # Config entry diagnostics (API token redacted)
 |       |-- entity.py            # Base LogShedEntity (CoordinatorEntity subclass)
 |       |-- manifest.json        # Integration manifest
@@ -44,6 +44,7 @@ homeassistant-logshed/
 |       |-- services.py          # logshed.enable_maintenance, logshed.disable_maintenance
 |       |-- services.yaml        # Service schemas & descriptions for HA Developer Tools
 |       |-- switch.py            # Maintenance mode switch (the session Home Assistant started)
+|       |-- update.py            # Update entity (LogShed version and latest stable release)
 |       |-- strings.json         # Base localization strings
 |       `-- translations/
 |           `-- en.json          # English translation strings
@@ -59,7 +60,8 @@ homeassistant-logshed/
 |   |-- test_init.py             # Setup and unload lifecycle tests
 |   |-- test_sensor.py           # Sensor state & extra attribute verification
 |   |-- test_services.py         # Service call execution tests
-|   `-- test_switch.py           # Switch control tests
+|   |-- test_switch.py           # Switch control tests
+|   `-- test_update.py           # Update entity tests
 |-- CHANGELOG.md                 # Project version changelog (Keep a Changelog)
 |-- hacs.json                    # HACS repository metadata
 |-- icon.png                     # Repository brand icon
@@ -75,6 +77,8 @@ homeassistant-logshed/
 ### A. Data Polling & Coordinator
 - Polling uses `LogShedDataUpdateCoordinator` (inheriting from `DataUpdateCoordinator`).
 - Default scan interval is 30 seconds (configurable via Options Flow between 10s and 300s).
+- `LogShedVersionCoordinator` polls `GET /api/v1/system/version` once an hour (LogShed caches its GHCR check for 1 hour), separate from the metrics poll. Its first refresh must not block setup; a `404` sets `endpoint_missing` and the update entity is not created (`runtime_data.version_coordinator` is `None`).
+- The update entity (`update.logshed_update`, Diagnostic, no install feature) overrides `version_is_newer` with LogShed's `update_available`, so pre-release installs compare as LogShed compares them. `latest_version` is `None` (unknown) when LogShed's check is off or failed.
 - All entity platforms (`sensor`, `binary_sensor`, `switch`, etc.) inherit from `CoordinatorEntity`.
 
 ### B. Asynchronous Networking

@@ -28,4 +28,9 @@ async def async_get_config_entry_diagnostics(
         "scopes": runtime.scopes,
         "last_update_success": coordinator.last_update_success,
         "metrics": asdict(coordinator.data) if coordinator.data else None,
+        "version": (
+            asdict(runtime.version_coordinator.data)
+            if runtime.version_coordinator and runtime.version_coordinator.data
+            else None
+        ),
     }

@@ -9,6 +9,18 @@ from .const import DOMAIN
 from .coordinator import LogShedDataUpdateCoordinator
 
 
+def logshed_device_info(coordinator: LogShedDataUpdateCoordinator) -> DeviceInfo:
+    """Return device information about a LogShed instance."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, coordinator.data.instance_id)},
+        name=coordinator.data.server_name or "LogShed",
+        manufacturer="LogShed",
+        model="Log Management Server",
+        sw_version=coordinator.data.version,
+        configuration_url=coordinator.api.host,
+    )
+
+
 class LogShedEntity(CoordinatorEntity[LogShedDataUpdateCoordinator]):
     """Base entity for LogShed entities."""
 
@@ -26,11 +38,4 @@ class LogShedEntity(CoordinatorEntity[LogShedDataUpdateCoordinator]):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information about this LogShed instance."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.data.instance_id)},
-            name=self.coordinator.data.server_name or "LogShed",
-            manufacturer="LogShed",
-            model="Log Management Server",
-            sw_version=self.coordinator.data.version,
-            configuration_url=self.coordinator.api.host,
-        )
+        return logshed_device_info(self.coordinator)

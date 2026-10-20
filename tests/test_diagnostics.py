@@ -28,4 +28,5 @@ async def test_diagnostics_redact_token(
     assert result["last_update_success"] is True
     assert result["metrics"]["instance_id"] == MOCK_INSTANCE_ID
     assert result["metrics"]["udp_receive_errors"] == 7
+    assert result["version"]["latest_version"] == "1.4.0"
     assert MOCK_TOKEN not in str(result)
