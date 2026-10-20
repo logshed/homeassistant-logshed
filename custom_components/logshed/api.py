@@ -74,6 +74,11 @@ class LogShedMetrics:
     ingest_rate: float
     error_count_24h: int
     error_count_1h: int
+    emergency_logs_24h: int
+    alert_logs_24h: int
+    critical_logs_24h: int
+    error_logs_24h: int
+    warning_logs_24h: int
     top_error_apps: list[dict[str, Any]]
     top_error_hosts: list[dict[str, Any]]
     alert_active: bool
@@ -101,6 +106,7 @@ class LogShedMetrics:
         top_err = data.get("top_error_breakdown") or {}
         alert = data.get("alert_state") or {}
         maint = data.get("maintenance") or {}
+        severity = data.get("severity_counts_24h") or {}
 
         top_apps = [
             {"name": item.get("name", ""), "count": item.get("count", 0)}
@@ -118,6 +124,11 @@ class LogShedMetrics:
             ingest_rate=float(data.get("ingest_rate", 0.0)),
             error_count_24h=int(data.get("error_count_24h", 0)),
             error_count_1h=int(data.get("error_count_1h", 0)),
+            emergency_logs_24h=int(severity.get("emergency", 0)),
+            alert_logs_24h=int(severity.get("alert", 0)),
+            critical_logs_24h=int(severity.get("critical", 0)),
+            error_logs_24h=int(severity.get("error", 0)),
+            warning_logs_24h=int(severity.get("warning", 0)),
             top_error_apps=top_apps,
             top_error_hosts=top_hosts,
             alert_active=bool(alert.get("active", False)),

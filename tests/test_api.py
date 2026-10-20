@@ -13,6 +13,7 @@ from custom_components.logshed.api import (
     LogShedCannotConnect,
     LogShedConflict,
     LogShedInvalidAuth,
+    LogShedMetrics,
     LogShedRateLimited,
     LogShedServerError,
 )
@@ -59,6 +60,23 @@ async def test_api_get_system_metrics_success() -> None:
     assert metrics.server_name == "TestShed"
     assert metrics.ingest_rate == 42.5
     assert metrics.maintenance_active is True
+    assert metrics.emergency_logs_24h == 0
+    assert metrics.alert_logs_24h == 1
+    assert metrics.critical_logs_24h == 4
+    assert metrics.error_logs_24h == 12
+    assert metrics.warning_logs_24h == 23
+
+
+def test_metrics_without_severity_counts_default_to_zero() -> None:
+    """Test a metrics payload without severity_counts_24h parses with zero counts."""
+    data = {k: v for k, v in MOCK_SYSTEM_METRICS_RESPONSE.items() if k != "severity_counts_24h"}
+    metrics = LogShedMetrics.from_dict(data)
+    assert metrics.error_count_24h == 17
+    assert metrics.emergency_logs_24h == 0
+    assert metrics.alert_logs_24h == 0
+    assert metrics.critical_logs_24h == 0
+    assert metrics.error_logs_24h == 0
+    assert metrics.warning_logs_24h == 0
 
 
 async def test_api_maintenance_enable_and_disable() -> None:

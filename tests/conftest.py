@@ -47,6 +47,13 @@ MOCK_SYSTEM_METRICS_RESPONSE: dict[str, Any] = {
     "ingest_rate": 42.5,
     "error_count_24h": 17,
     "error_count_1h": 3,
+    "severity_counts_24h": {
+        "emergency": 0,
+        "alert": 1,
+        "critical": 4,
+        "error": 12,
+        "warning": 23,
+    },
     "top_error_breakdown": {
         "top_apps": [
             {"name": "postgres", "count": 12},

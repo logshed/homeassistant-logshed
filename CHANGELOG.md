@@ -13,9 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dynamic options flow to configure metrics polling interval (10 to 300s), default maintenance duration (5 to 720 min), and default maintenance log handling mode (`silence_alerts` or `drop_errors`).
 - Reauthentication flow handling expired or rotated API tokens with automatic reload.
 - `LogShedDataUpdateCoordinator` polling `/api/v1/system/metrics` with automatic error propagation and offline state handling.
-- 11 sensor entities for real-time and Long-Term Statistics (LTS):
+- 16 sensor entities for real-time and Long-Term Statistics (LTS):
   - Ingestion Rate (`logs/s`)
-  - Rolling 24-hour and 1-hour Error Counts with top offending applications (`top_error_apps`) and hosts (`top_error_hosts`)
+  - Rolling 24-hour and 1-hour Error or Worse Logs (severities 0 to 3 combined) with top offending applications (`top_error_apps`) and hosts (`top_error_hosts`)
+  - Rolling 24-hour log counts per severity: Emergency, Alert, Critical, Error and Warning
   - Total Stored Logs
   - Database File Size (`MB`)
   - Free Disk Space (`GB`)
@@ -23,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - In-memory Queue Depth
   - Dropped Logs & Filtered Logs
   - Maintenance Remaining (`s`)
+- Server health sensors (Database Size, Free Disk Space, Disk Used Percent, Queue Depth, Dropped Logs and Filtered Logs) are diagnostic entities, so the device page keeps the log activity sensors together.
 - 3 binary sensors:
   - Alert State (sliding 15-minute problem state class)
   - Maintenance Active (with session attributes: `until`, `remaining_seconds`, `active_sessions_count`, `log_handling`)

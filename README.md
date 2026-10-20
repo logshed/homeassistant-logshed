@@ -16,7 +16,7 @@ Connects your Home Assistant instance with your self-hosted [LogShed](https://gi
 
 ## Features
 
-- **Real-time & Historical Telemetry:** Native Long-Term Statistics (LTS) for ingestion throughput (`logs/s`), rolling error statistics (1h, 24h), storage metrics, and log counts.
+- **Real-time & Historical Telemetry:** Native Long-Term Statistics (LTS) for ingestion throughput (`logs/s`), rolling error statistics (1h, 24h, and 24h per severity from emergency to warning), storage metrics, and log counts.
 - **Incident & Problem Sensors:** Binary problem sensors reflecting LogShed alert rules (ideal for flashing desk lamps red or sending high-priority alerts).
 - **Automated Maintenance Integration:** Native switches and service actions (`logshed.enable_maintenance`, `logshed.disable_maintenance`) for backup hooks (Home Assistant Backups, Proxmox VE backups, restic, Borg) to silence alerts or drop error floods during scheduled backup routines.
 - **Diagnostic Controls:** On-demand database compaction (`VACUUM`) and retention pruning buttons directly within Home Assistant.
@@ -70,22 +70,34 @@ Click **Configure** on the LogShed integration card to adjust runtime options:
 | Entity ID | Name | Unit | Class | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `sensor.logshed_ingestion_rate` | Ingestion Rate | `logs/s` | `measurement` | Real-time log ingestion rate. |
-| `sensor.logshed_error_count_24h` | Errors (24h) | `errors` | `total` | Rolling 24-hour error count. Includes `top_error_apps` and `top_error_hosts` attributes. |
-| `sensor.logshed_error_count_1h` | Errors (1h) | `errors` | `total` | Rolling 1-hour error spike count. Includes `top_error_apps` and `top_error_hosts` attributes. |
+| `sensor.logshed_error_or_worse_logs_24h` | Error or Worse Logs 24h | `logs` | `total` | Rolling 24-hour count of emergency, alert, critical and error (severity 0 to 3) logs combined. Includes `top_error_apps` and `top_error_hosts` attributes. |
+| `sensor.logshed_error_or_worse_logs_1h` | Error or Worse Logs 1h | `logs` | `total` | Rolling 1-hour count of severity 0 to 3 logs combined. Includes `top_error_apps` and `top_error_hosts` attributes. |
+| `sensor.logshed_emergency_logs_24h` | Emergency Logs 24h | `logs` | `total` | Rolling 24-hour count of emergency (severity 0) logs. |
+| `sensor.logshed_alert_logs_24h` | Alert Logs 24h | `logs` | `total` | Rolling 24-hour count of alert (severity 1) logs. Not related to LogShed alert rules. |
+| `sensor.logshed_critical_logs_24h` | Critical Logs 24h | `logs` | `total` | Rolling 24-hour count of critical (severity 2) logs. |
+| `sensor.logshed_error_logs_24h` | Error Logs 24h | `logs` | `total` | Rolling 24-hour count of error (severity 3) logs only. |
+| `sensor.logshed_warning_logs_24h` | Warning Logs 24h | `logs` | `total` | Rolling 24-hour count of warning (severity 4) logs. |
 | `sensor.logshed_total_logs` | Total Logs | `logs` | `measurement` | Current count of stored logs in the database. |
+| `sensor.logshed_maintenance_remaining`| Maintenance Remaining| `s` | `duration` | Seconds remaining in the current active maintenance window. |
+
+### Diagnostic Sensors
+
+Server health sensors are in the **Diagnostic** card on the device page, so the **Sensors** card keeps the log activity sensors together. They work in automations and keep long-term statistics like any other sensor, but the auto-generated default dashboard leaves them out.
+
+| Entity ID | Name | Unit | Class | Description |
+| :--- | :--- | :--- | :--- | :--- |
 | `sensor.logshed_database_size` | Database Size | `MB` | `data_size` | SQLite database file size. |
 | `sensor.logshed_disk_free` | Disk Space Free | `GB` | `data_size` | Free space on the LogShed storage mount. |
 | `sensor.logshed_disk_used_percent` | Disk Used | `%` | `measurement` | Storage mount disk usage percentage. |
 | `sensor.logshed_queue_depth` | Queue Depth | `messages` | `measurement` | Pending messages in the in-memory ring buffer. |
 | `sensor.logshed_dropped_logs` | Dropped Logs | `logs` | `total_increasing` | Logs dropped due to ring buffer overflow. |
 | `sensor.logshed_filtered_logs` | Filtered Logs | `logs` | `total_increasing` | Logs discarded by active drop rules or maintenance filters. |
-| `sensor.logshed_maintenance_remaining`| Maintenance Remaining| `s` | `duration` | Seconds remaining in the current active maintenance window. |
 
 ### Binary Sensors
 
 | Entity ID | Name | Device Class | Description |
 | :--- | :--- | :--- | :--- |
-| `binary_sensor.logshed_alert_state` | Alert Active | `problem` | **`on`** when any alert rule triggered in the sliding 15-minute window. |
+| `binary_sensor.logshed_alert_state` | Alert Active | `problem` | **`on`** when any alert rule triggered in the sliding 15-minute window. Daily digests, on-demand AI analyses and maintenance windows do not turn it on. |
 | `binary_sensor.logshed_maintenance_active` | Maintenance Active | None | **`on`** when any maintenance session is currently active. |
 | `binary_sensor.logshed_connectivity` | Connectivity | `connectivity` | **`on`** when Home Assistant successfully communicates with LogShed. |
 
@@ -157,9 +169,9 @@ type: history-graph
 title: LogShed System Health
 hours_to_show: 24
 entities:
-  - entity: sensor.logshed_error_count_24h
+  - entity: sensor.logshed_error_or_worse_logs_24h
     name: Rolling 24h Errors
-  - entity: sensor.logshed_error_count_1h
+  - entity: sensor.logshed_error_or_worse_logs_1h
     name: Recent 1h Errors
   - entity: sensor.logshed_queue_depth
     name: Buffer Queue Depth

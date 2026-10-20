@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from homeassistant.const import Platform
+from homeassistant.const import EntityCategory, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -40,9 +40,10 @@ async def test_sensors_state_and_attributes(
     assert state.attributes.get("unit_of_measurement") == "logs/s"
 
     # 2. Errors 24h & breakdown attributes
-    state = hass.states.get("sensor.logshed_error_count_24h")
+    state = hass.states.get("sensor.logshed_error_or_worse_logs_24h")
     assert state is not None
     assert int(state.state) == 17
+    assert state.attributes.get("unit_of_measurement") == "logs"
     assert state.attributes.get("top_error_apps") == [
         {"name": "postgres", "count": 12},
         {"name": "traefik", "count": 5},
@@ -53,13 +54,27 @@ async def test_sensors_state_and_attributes(
     ]
 
     # 3. Errors 1h
-    state = hass.states.get("sensor.logshed_error_count_1h")
+    state = hass.states.get("sensor.logshed_error_or_worse_logs_1h")
     assert state is not None
     assert int(state.state) == 3
     assert state.attributes.get("top_error_apps") == [
         {"name": "postgres", "count": 12},
         {"name": "traefik", "count": 5},
     ]
+
+    # 3a. Per-severity 24h counts (emergency to warning)
+    for entity_id, expected in (
+        ("sensor.logshed_emergency_logs_24h", 0),
+        ("sensor.logshed_alert_logs_24h", 1),
+        ("sensor.logshed_critical_logs_24h", 4),
+        ("sensor.logshed_error_logs_24h", 12),
+        ("sensor.logshed_warning_logs_24h", 23),
+    ):
+        state = hass.states.get(entity_id)
+        assert state is not None, entity_id
+        assert int(state.state) == expected
+        assert state.attributes.get("unit_of_measurement") == "logs"
+        assert state.attributes.get("state_class") == "total"
 
     # 4. Total Logs
     state = hass.states.get("sensor.logshed_total_logs")
@@ -111,3 +126,19 @@ async def test_sensors_state_and_attributes(
     entry = entity_reg.async_get("sensor.logshed_ingestion_rate")
     assert entry is not None
     assert entry.unique_id == f"{mock_metrics.instance_id}_ingestion_rate"
+
+    # Server health sensors sit in the Diagnostic card; log activity sensors stay in Sensors
+    diagnostic = {
+        "database_size",
+        "disk_free",
+        "disk_used_percent",
+        "queue_depth",
+        "dropped_logs",
+        "filtered_logs",
+    }
+    sensor_entries = er.async_entries_for_config_entry(entity_reg, mock_config_entry.entry_id)
+    assert len(sensor_entries) == 16
+    for reg_entry in sensor_entries:
+        key = reg_entry.unique_id.removeprefix(f"{mock_metrics.instance_id}_")
+        expected = EntityCategory.DIAGNOSTIC if key in diagnostic else None
+        assert reg_entry.entity_category == expected, key

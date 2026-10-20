@@ -93,7 +93,8 @@ homeassistant-logshed/
 
 ### D. Entities & State Management
 - **Sensors:** Declare explicit `state_class` (`SensorStateClass.MEASUREMENT`, `TOTAL`, or `TOTAL_INCREASING`) and `device_class` (`SensorDeviceClass.DATA_SIZE`, `DURATION`, etc.) so Home Assistant Long-Term Statistics (LTS) track them automatically. Disk Used Percent uses icon `mdi:chart-pie`.
-- **Attributes:** Rolling error sensors (`sensor.logshed_error_count_24h` and `1h`) must provide breakdown attributes: `top_error_apps` and `top_error_hosts` (`[{"name": "...", "count": N}]`).
+- **Entity Categories:** Server health sensors (database size, disk free, disk used percent, queue depth, dropped logs, filtered logs) and the prune and vacuum buttons use `EntityCategory.DIAGNOSTIC`; log activity sensors have no category, so they sit together in the Sensors card.
+- **Attributes:** Rolling error or worse sensors (`sensor.logshed_error_or_worse_logs_24h` and `1h`, severities 0 to 3 combined) must provide breakdown attributes: `top_error_apps` and `top_error_hosts` (`[{"name": "...", "count": N}]`).
 - **Binary Sensors:** Problem device class for `binary_sensor.logshed_alert_state` (15-minute sliding window), `connectivity` for polling status, and custom for active maintenance.
 - **Device Info:** Group all entities under a unified LogShed device entry via `DeviceInfo(identifiers={(DOMAIN, instance_id)}, ...)` so they appear cleanly under **Settings > Devices & Services**.
 

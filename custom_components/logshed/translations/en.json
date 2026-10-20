@@ -48,11 +48,26 @@
       "ingestion_rate": {
         "name": "Ingestion Rate"
       },
-      "error_count_24h": {
-        "name": "Error Count 24h"
+      "error_or_worse_logs_24h": {
+        "name": "Error or Worse Logs 24h"
       },
-      "error_count_1h": {
-        "name": "Error Count 1h"
+      "error_or_worse_logs_1h": {
+        "name": "Error or Worse Logs 1h"
+      },
+      "emergency_logs_24h": {
+        "name": "Emergency Logs 24h"
+      },
+      "alert_logs_24h": {
+        "name": "Alert Logs 24h"
+      },
+      "critical_logs_24h": {
+        "name": "Critical Logs 24h"
+      },
+      "error_logs_24h": {
+        "name": "Error Logs 24h"
+      },
+      "warning_logs_24h": {
+        "name": "Warning Logs 24h"
       },
       "total_logs": {
         "name": "Total Logs"

@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfInformation, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -41,11 +41,11 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         value_fn=lambda metrics: metrics.ingest_rate,
     ),
     LogShedSensorEntityDescription(
-        key="error_count_24h",
-        translation_key="error_count_24h",
+        key="error_or_worse_logs_24h",
+        translation_key="error_or_worse_logs_24h",
         icon="mdi:alert-circle-outline",
         state_class=SensorStateClass.TOTAL,
-        native_unit_of_measurement="errors",
+        native_unit_of_measurement="logs",
         value_fn=lambda metrics: metrics.error_count_24h,
         extra_attrs_fn=lambda metrics: {
             "top_error_apps": metrics.top_error_apps,
@@ -53,16 +53,56 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         },
     ),
     LogShedSensorEntityDescription(
-        key="error_count_1h",
-        translation_key="error_count_1h",
+        key="error_or_worse_logs_1h",
+        translation_key="error_or_worse_logs_1h",
         icon="mdi:alert-circle",
         state_class=SensorStateClass.TOTAL,
-        native_unit_of_measurement="errors",
+        native_unit_of_measurement="logs",
         value_fn=lambda metrics: metrics.error_count_1h,
         extra_attrs_fn=lambda metrics: {
             "top_error_apps": metrics.top_error_apps,
             "top_error_hosts": metrics.top_error_hosts,
         },
+    ),
+    LogShedSensorEntityDescription(
+        key="emergency_logs_24h",
+        translation_key="emergency_logs_24h",
+        icon="mdi:alarm-light",
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement="logs",
+        value_fn=lambda metrics: metrics.emergency_logs_24h,
+    ),
+    LogShedSensorEntityDescription(
+        key="alert_logs_24h",
+        translation_key="alert_logs_24h",
+        icon="mdi:bell-alert",
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement="logs",
+        value_fn=lambda metrics: metrics.alert_logs_24h,
+    ),
+    LogShedSensorEntityDescription(
+        key="critical_logs_24h",
+        translation_key="critical_logs_24h",
+        icon="mdi:alert-octagon",
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement="logs",
+        value_fn=lambda metrics: metrics.critical_logs_24h,
+    ),
+    LogShedSensorEntityDescription(
+        key="error_logs_24h",
+        translation_key="error_logs_24h",
+        icon="mdi:close-circle-outline",
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement="logs",
+        value_fn=lambda metrics: metrics.error_logs_24h,
+    ),
+    LogShedSensorEntityDescription(
+        key="warning_logs_24h",
+        translation_key="warning_logs_24h",
+        icon="mdi:alert-outline",
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement="logs",
+        value_fn=lambda metrics: metrics.warning_logs_24h,
     ),
     LogShedSensorEntityDescription(
         key="total_logs",
@@ -74,6 +114,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
     ),
     LogShedSensorEntityDescription(
         key="database_size",
+        entity_category=EntityCategory.DIAGNOSTIC,
         translation_key="database_size",
         icon="mdi:database-outline",
         state_class=SensorStateClass.MEASUREMENT,
@@ -83,6 +124,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
     ),
     LogShedSensorEntityDescription(
         key="disk_free",
+        entity_category=EntityCategory.DIAGNOSTIC,
         translation_key="disk_free",
         icon="mdi:harddisk",
         state_class=SensorStateClass.MEASUREMENT,
@@ -92,6 +134,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
     ),
     LogShedSensorEntityDescription(
         key="disk_used_percent",
+        entity_category=EntityCategory.DIAGNOSTIC,
         translation_key="disk_used_percent",
         icon="mdi:chart-pie",
         state_class=SensorStateClass.MEASUREMENT,
@@ -100,6 +143,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
     ),
     LogShedSensorEntityDescription(
         key="queue_depth",
+        entity_category=EntityCategory.DIAGNOSTIC,
         translation_key="queue_depth",
         icon="mdi:tray-full",
         state_class=SensorStateClass.MEASUREMENT,
@@ -108,6 +152,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
     ),
     LogShedSensorEntityDescription(
         key="dropped_logs",
+        entity_category=EntityCategory.DIAGNOSTIC,
         translation_key="dropped_logs",
         icon="mdi:delete-empty",
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -116,6 +161,7 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
     ),
     LogShedSensorEntityDescription(
         key="filtered_logs",
+        entity_category=EntityCategory.DIAGNOSTIC,
         translation_key="filtered_logs",
         icon="mdi:filter-outline",
         state_class=SensorStateClass.TOTAL_INCREASING,
