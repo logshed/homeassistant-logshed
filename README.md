@@ -107,7 +107,7 @@ The rolling counts are gauges (`measurement`) that rise and fall as logs age out
 | `sensor.logshed_error_logs_24h` | Error Logs 24h | `logs` | `measurement` | Rolling 24-hour count of error (severity 3) logs only. |
 | `sensor.logshed_warning_logs_24h` | Warning Logs 24h | `logs` | `measurement` | Rolling 24-hour count of warning (severity 4) logs. |
 | `sensor.logshed_total_logs` | Total Logs | `logs` | `measurement` | Current count of stored logs in the database. |
-| `sensor.logshed_maintenance_remaining`| Maintenance Remaining| `s` | `duration` | Seconds remaining in the current active maintenance window. |
+| `sensor.logshed_maintenance_remaining`| Maintenance Remaining| `min` | `duration` | Time remaining in the current active maintenance window. Reported in seconds and shown in whole minutes by default; change the unit in the entity settings. |
 
 ### Diagnostic Sensors
 

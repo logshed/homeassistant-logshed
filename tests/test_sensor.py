@@ -132,8 +132,9 @@ async def test_sensors_state_and_attributes(
     # 11. Maintenance Remaining
     state = hass.states.get("sensor.logshed_maintenance_remaining")
     assert state is not None
-    assert int(state.state) == 1800
-    assert state.attributes.get("unit_of_measurement") == "s"
+    # 1800 seconds shown in minutes with no decimals
+    assert float(state.state) == pytest.approx(30)
+    assert state.attributes.get("unit_of_measurement") == "min"
 
     # Check unique ID format on an entity
     entry = entity_reg.async_get("sensor.logshed_ingestion_rate")

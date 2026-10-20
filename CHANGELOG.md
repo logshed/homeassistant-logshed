@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - In-memory Queue Depth
   - Dropped Logs & Filtered Logs
   - UDP Lost (`datagrams`): UDP syslog datagrams the kernel discarded because LogShed's receive buffer was full, unknown when LogShed cannot read the counter
-  - Maintenance Remaining (`s`)
+  - Maintenance Remaining, reported in seconds and shown in whole minutes by default (`duration`, so the unit can be changed)
 - The rolling log counts (Error or Worse Logs and the per-severity counts) use the `measurement` state class, since they rise and fall as logs leave the window.
 - Server health sensors (Database Size, Disk Free, Disk Used Percent, Queue Depth, Dropped Logs, Filtered Logs and UDP Lost) are diagnostic entities, so the device page keeps the log activity sensors together.
 - 3 binary sensors:
