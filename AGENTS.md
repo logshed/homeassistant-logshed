@@ -89,7 +89,7 @@ homeassistant-logshed/
 ### C. Config Flow & Authentication
 - Setup is strictly UI-based via `config_flow.py` (`"config_flow": true` in `manifest.json` is mandatory for HACS default inclusion).
 - Collects:
-  - `host`: LogShed instance URL (e.g., `http://192.168.1.100:8000`)
+  - `host`: LogShed instance URL (e.g., `http://192.168.1.100:8080`)
   - `api_token`: Bearer token (`ls_live_...`)
   - `verify_ssl`: Boolean (default `True`, toggleable for self-signed certificates)
   - `default_maintenance_duration`: Integer in minutes (default `60`, range 5 to 720)

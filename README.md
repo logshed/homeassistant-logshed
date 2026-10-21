@@ -2,7 +2,7 @@
 
 [![Validate](https://github.com/logshed/homeassistant-logshed/actions/workflows/validate.yml/badge.svg)](https://github.com/logshed/homeassistant-logshed/actions/workflows/validate.yml)
 [![Test](https://github.com/logshed/homeassistant-logshed/actions/workflows/test.yml/badge.svg)](https://github.com/logshed/homeassistant-logshed/actions/workflows/test.yml)
-[![HACS Default](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/default)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
 [![Version](https://img.shields.io/github/v/release/logshed/homeassistant-logshed)](https://github.com/logshed/homeassistant-logshed/releases)
 
 > [!IMPORTANT]
@@ -28,6 +28,8 @@ Connects your Home Assistant instance with your self-hosted [LogShed](https://gi
 ## Installation
 
 ### Method 1: HACS (Recommended)
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=logshed&repository=homeassistant-logshed&category=integration)
 
 1. Ensure [HACS](https://hacs.xyz/) is installed in your Home Assistant instance.
 2. In Home Assistant, navigate to **HACS > Integrations**.
@@ -56,7 +58,7 @@ Connects your Home Assistant instance with your self-hosted [LogShed](https://gi
 1. In Home Assistant, go to **Settings > Devices & Services**.
 2. Click **Add Integration** and search for **LogShed**.
 3. Enter your LogShed connection details:
-   - **Host URL:** The base URL of your LogShed server (e.g. `http://192.168.1.100:8000`).
+   - **Host URL:** The base URL of your LogShed server (e.g. `http://192.168.1.100:8080`).
    - **API Token:** A LogShed API Bearer token starting with `ls_live_...`.
      - *Recommended:* In LogShed, go to **Settings > API & MCP Access**, click **Generate Token** and choose the **Home Assistant** preset (`system:read`, `maintenance:write`, `system:write`). For sensors only, choose **Custom** and tick `system:read`. Avoid Full Access (`*`): it also lets the token read your logs and grants actions added in later LogShed versions. See the [API Token Scopes Guide](https://github.com/logshed/logshed/blob/main/docs/API_SCOPES.md).
    - **Verify SSL Certificate:** Uncheck if using a self-signed HTTPS certificate in your home lab.
