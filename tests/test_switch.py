@@ -5,10 +5,12 @@ from __future__ import annotations
 from datetime import timedelta
 from unittest.mock import AsyncMock
 
+import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, State
+from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     mock_restore_cache_with_extra_data,
@@ -17,9 +19,11 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.logshed.api import (
     LogShedApiClient,
     LogShedAuthInfo,
+    LogShedInvalidAuth,
     LogShedMetrics,
     LogShedNotFound,
 )
+from custom_components.logshed.const import DOMAIN
 
 from .conftest import MOCK_SESSION_UNTIL, setup_integration
 
@@ -192,3 +196,44 @@ async def test_switch_not_created_without_maintenance_write(
     await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SWITCH])
 
     assert hass.states.get(ENTITY_ID) is None
+
+
+SCOPE_ERROR = "Insufficient token scope. Required: maintenance:write"
+
+
+async def test_switch_turn_on_reports_a_scope_removed_after_setup(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """Test a token that lost maintenance:write since setup gives a clear error, not a reauth."""
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SWITCH])
+    mock_api_client.async_enable_maintenance = AsyncMock(
+        side_effect=LogShedInvalidAuth(SCOPE_ERROR)
+    )
+
+    with pytest.raises(HomeAssistantError, match="Required: maintenance:write"):
+        await _call(hass, "turn_on")
+
+    assert hass.states.get(ENTITY_ID).state == "off"
+    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+
+
+async def test_switch_turn_off_reports_a_scope_removed_after_setup(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """Test ending the session with a token that lost maintenance:write keeps the switch on."""
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SWITCH])
+    await _call(hass, "turn_on")
+    mock_api_client.async_disable_maintenance = AsyncMock(
+        side_effect=LogShedInvalidAuth(SCOPE_ERROR)
+    )
+
+    with pytest.raises(HomeAssistantError, match="Required: maintenance:write"):
+        await _call(hass, "turn_off")
+
+    # The session was not ended on the server
+    assert hass.states.get(ENTITY_ID).state == "on"
+    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN)

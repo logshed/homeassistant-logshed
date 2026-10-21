@@ -58,14 +58,14 @@ Connects your Home Assistant instance with your self-hosted [LogShed](https://gi
 3. Enter your LogShed connection details:
    - **Host URL:** The base URL of your LogShed server (e.g. `http://192.168.1.100:8000`).
    - **API Token:** A LogShed API Bearer token starting with `ls_live_...`.
-     - *Recommended:* Generate a token in LogShed under **Settings > API & MCP Access** with Full Access (`*`) or `system:read`, `system:write`, and `maintenance:write` scopes.
+     - *Recommended:* In LogShed, go to **Settings > API & MCP Access**, click **Generate Token** and choose the **Home Assistant** preset (`system:read`, `maintenance:write`, `system:write`). For sensors only, choose **Custom** and tick `system:read`. Avoid Full Access (`*`): it also lets the token read your logs and grants actions added in later LogShed versions. See the [API Token Scopes Guide](https://github.com/logshed/logshed/blob/main/docs/API_SCOPES.md).
    - **Verify SSL Certificate:** Uncheck if using a self-signed HTTPS certificate in your home lab.
    - **Default Maintenance Duration (minutes):** Duration in minutes (5 to 720, default: 60) used when turning Quick Maintenance on.
 4. Click **Submit**. All entities will be automatically created under a single device named after the LogShed server.
 
 ### Token Scopes
 
-`system:read` is required. The other scopes add controls, and are checked each time the integration loads, so a token whose scopes change on the LogShed server is picked up after a reload:
+`system:read` is required. The other scopes add controls. The integration reads the token's scopes each time it loads, so after you change them in LogShed (**Edit** in the token list keeps the same token), reload the integration under **Settings > Devices & Services > LogShed > Reload**. Until then, a switch or button whose scope was removed stays in place and fails with an insufficient scope error when used. Removing `system:read` makes Home Assistant ask you to re-authenticate.
 
 | Scope | Adds |
 | :--- | :--- |
