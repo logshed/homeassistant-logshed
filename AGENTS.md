@@ -64,8 +64,6 @@ homeassistant-logshed/
 |   `-- test_update.py           # Update entity tests
 |-- CHANGELOG.md                 # Project version changelog (Keep a Changelog)
 |-- hacs.json                    # HACS repository metadata
-|-- icon.png                     # Repository brand icon
-|-- logo.png                     # Repository brand logo
 |-- pyproject.toml               # Development dependencies, ruff & pytest config
 `-- README.md                    # Installation instructions, Lovelace snippets, automations
 ```

@@ -5,6 +5,11 @@ All notable changes to the LogShed Home Assistant integration will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+- Duplicate brand images (`icon.png` and `logo.png` at the repository root and in `custom_components/logshed/`). Home Assistant uses only `custom_components/logshed/brand/`.
+
 ## [1.0.0] - 2026-11-09
 
 ### Added
