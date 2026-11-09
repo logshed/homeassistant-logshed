@@ -1,6 +1,7 @@
 {
   "domain": "logshed",
   "name": "LogShed",
+  "categories": ["computers_network.monitoring"],
   "codeowners": ["@BenHornerTech"],
   "config_flow": true,
   "documentation": "https://github.com/logshed/homeassistant-logshed",

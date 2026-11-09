@@ -5,9 +5,6 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
 [![Version](https://img.shields.io/github/v/release/logshed/homeassistant-logshed)](https://github.com/logshed/homeassistant-logshed/releases)
 
-> [!IMPORTANT]
-> **Pre-release Notice:** This integration is currently in pre-release and requires LogShed server version **1.3.0** or later. It relies on the external REST metrics and maintenance API endpoints introduced in LogShed 1.3.0 and will not work with older LogShed versions.
-
 The official [Home Assistant Community Store (HACS)](https://hacs.xyz/) custom integration for **LogShed** (requires LogShed server v1.3.0+).
 
 Connects your Home Assistant instance with your self-hosted [LogShed](https://github.com/logshed/logshed) server to deliver real-time ingestion telemetry, error tracking with top offending services, storage stats, automated maintenance window controls, diagnostic buttons, and smart home alert triggers.
@@ -27,9 +24,20 @@ Connects your Home Assistant instance with your self-hosted [LogShed](https://gi
 
 ## Installation
 
-### Method 1: HACS (Recommended)
+### Method 1: Marketplace or HACS (Recommended)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=logshed&repository=homeassistant-logshed&category=integration)
+
+The button opens the repository in the Marketplace on Home Assistant 2026.11 and later, and in HACS on older versions. To add it by hand instead:
+
+**Home Assistant 2026.11 and later (Marketplace):**
+
+1. In Home Assistant, go to **Settings > Marketplace**.
+2. Select **Add from link** (upper right) and enter `logshed/homeassistant-logshed`. If asked, connect your GitHub account with GitHub's device sign-in, and choose **Integration** as the type.
+3. Open **LogShed** and select **Install**.
+4. Restart Home Assistant.
+
+**Home Assistant 2026.10 and older (HACS):**
 
 1. Ensure [HACS](https://hacs.xyz/) is installed in your Home Assistant instance.
 2. In Home Assistant, navigate to **HACS > Integrations**.

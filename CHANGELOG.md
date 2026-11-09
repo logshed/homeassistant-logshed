@@ -5,7 +5,7 @@ All notable changes to the LogShed Home Assistant integration will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-10-16
+## [1.0.0] - 2026-11-09
 
 ### Added
 - Initial release of the official LogShed Home Assistant custom integration. Requires Home Assistant 2024.12.0 or later and LogShed 1.3.0 or later.
