@@ -2,10 +2,10 @@
 
 [![Validate](https://github.com/logshed/homeassistant-logshed/actions/workflows/validate.yml/badge.svg)](https://github.com/logshed/homeassistant-logshed/actions/workflows/validate.yml)
 [![Test](https://github.com/logshed/homeassistant-logshed/actions/workflows/test.yml/badge.svg)](https://github.com/logshed/homeassistant-logshed/actions/workflows/test.yml)
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz/)
 [![Version](https://img.shields.io/github/v/release/logshed/homeassistant-logshed)](https://github.com/logshed/homeassistant-logshed/releases)
 
-The official [Home Assistant Community Store (HACS)](https://hacs.xyz/) custom integration for **LogShed** (requires LogShed server v1.3.0+).
+The official Home Assistant integration for **LogShed**, listed in the Home Assistant Marketplace and the [Home Assistant Community Store (HACS)](https://hacs.xyz/) (requires LogShed server v1.3.0+).
 
 Connects your Home Assistant instance with your self-hosted [LogShed](https://github.com/logshed/logshed) server to deliver real-time ingestion telemetry, error tracking with top offending services, storage stats, automated maintenance window controls, diagnostic buttons, and smart home alert triggers.
 
@@ -28,23 +28,21 @@ Connects your Home Assistant instance with your self-hosted [LogShed](https://gi
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=logshed&repository=homeassistant-logshed&category=integration)
 
-The button opens the repository in the Marketplace on Home Assistant 2026.11 and later, and in HACS on older versions. To add it by hand instead:
+The button opens LogShed in the Marketplace on Home Assistant 2026.11 and later, and in HACS on older versions. To find it yourself instead:
 
 **Home Assistant 2026.11 and later (Marketplace):**
 
 1. In Home Assistant, go to **Settings > Marketplace**.
-2. Select **Add from link** (upper right) and enter `logshed/homeassistant-logshed`. If asked, connect your GitHub account with GitHub's device sign-in, and choose **Integration** as the type.
-3. Open **LogShed** and select **Install**.
+2. Search for **LogShed** and open it.
+3. Select **Install**.
 4. Restart Home Assistant.
 
 **Home Assistant 2026.10 and older (HACS):**
 
 1. Ensure [HACS](https://hacs.xyz/) is installed in your Home Assistant instance.
-2. In Home Assistant, navigate to **HACS > Integrations**.
-3. Click the top-right menu icon (three dots) and select **Custom repositories**.
-4. Enter `https://github.com/logshed/homeassistant-logshed` as the repository URL, select **Integration** as the category, and click **Add**.
-5. Find **LogShed** in the integration list and click **Download**.
-6. Restart Home Assistant.
+2. In Home Assistant, open **HACS** and search for **LogShed**.
+3. Open it and click **Download**.
+4. Restart Home Assistant.
 
 ### Method 2: Manual Installation
 
