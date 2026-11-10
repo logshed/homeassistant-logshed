@@ -299,6 +299,12 @@ action:
 
 ---
 
+## Support the Project
+
+LogShed and this integration are free and maintained in spare time. If they are useful to you, you can support them through [GitHub Sponsors](https://github.com/sponsors/BenHornerTech) or [Buy Me a Coffee](https://buymeacoffee.com/benhornertech).
+
+---
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
