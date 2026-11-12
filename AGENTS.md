@@ -118,9 +118,9 @@ homeassistant-logshed/
 - **Python Version:** Python 3.12+ compatible.
 - **Typing:** Use type annotations (`typing`) across all signatures.
 - **Error Handling:** Map HTTP and network errors to standard Home Assistant exceptions:
-  - `CannotConnect` on network unreachable / timeout. Only network failures map here, never an HTTP status.
-  - `InvalidAuth` on 401 / 403 HTTP responses.
-  - `NotFound` on 404, `BadRequest` on 400 and 422 (FastAPI validation `msg` values joined), `Conflict` on 409, `RateLimited` on 429, `ServerError` on 5xx, and `LogShedError` with the status for any other 4xx.
+  - `LogShedCannotConnect` on network unreachable / timeout. Only network failures map here, never an HTTP status.
+  - `LogShedInvalidAuth` on 401 / 403 HTTP responses.
+  - `LogShedNotFound` on 404, `LogShedBadRequest` on 400 and 422 (FastAPI validation `msg` values joined), `LogShedConflict` on 409, `LogShedRateLimited` on 429, `LogShedServerError` on 5xx, and `LogShedError` with the status for any other 4xx.
   - Prune and vacuum use `LONG_OPERATION_TIMEOUT` (600 s) because LogShed runs them inside the request; their timeout raises `LogShedOperationTimeout` (may still be running on the server). Other requests use `DEFAULT_REQUEST_TIMEOUT` (15 s).
   - `UpdateFailed` inside coordinator `_async_update_data`.
 - **Logging:** Use `_LOGGER = logging.getLogger(__name__)`. Do not log sensitive API tokens.
