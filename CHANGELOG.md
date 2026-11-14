@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The `logshed.enable_maintenance` action and the README say what `target_app` and `target_host` do with LogShed 1.4.0: a session with a target holds back only that target's alerts.
+
 ### Removed
 - Duplicate brand images (`icon.png` and `logo.png` at the repository root and in `custom_components/logshed/`). Home Assistant uses only `custom_components/logshed/brand/`.
 

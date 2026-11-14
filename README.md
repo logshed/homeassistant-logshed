@@ -175,6 +175,8 @@ data:
 response_variable: maintenance
 ```
 
+`target_app` and `target_host` limit the session to that app, host or both. With LogShed 1.4.0 or later, the target's logs then count towards no alert rule and every other alert is still sent; without a target, every alert notification is held back. With LogShed 1.3.x, every alert is silenced either way and the target only limits which error logs `drop_errors` drops.
+
 Response:
 
 ```yaml
