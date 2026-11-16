@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -13,11 +14,18 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation, UnitOfTime
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .api import LogShedMetrics
-from .coordinator import LogShedConfigEntry, LogShedDataUpdateCoordinator
+from .coordinator import (
+    SERVER_RECOVERY,
+    SERVER_STATUSES,
+    SERVER_UPGRADING,
+    LogShedConfigEntry,
+    LogShedDataUpdateCoordinator,
+)
 from .entity import LogShedEntity
 
 
@@ -27,6 +35,37 @@ class LogShedSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[LogShedMetrics], Any]
     extra_attrs_fn: Callable[[LogShedMetrics], dict[str, Any]] | None = None
+    # Created only once LogShed reports the data (older servers do not)
+    exists_fn: Callable[[LogShedMetrics], bool] | None = None
+
+
+def _parse_time(value: Any) -> datetime | None:
+    """An ISO 8601 time from LogShed as an aware datetime, or None."""
+    return dt_util.parse_datetime(value) if isinstance(value, str) else None
+
+
+def _sources_by_silence(metrics: LogShedMetrics) -> list[dict[str, Any]]:
+    """The sources, the longest silent first; those not seen since LogShed 1.4.0 last."""
+    sources = metrics.sources or []
+    seen = [s for s in sources if _parse_time(s["last_seen"]) is not None]
+    seen.sort(key=lambda s: _parse_time(s["last_seen"]))
+    return seen + [s for s in sources if _parse_time(s["last_seen"]) is None]
+
+
+def _longest_silent(metrics: LogShedMetrics) -> dict[str, Any] | None:
+    ordered = _sources_by_silence(metrics)
+    if ordered and _parse_time(ordered[0]["last_seen"]) is not None:
+        return ordered[0]
+    return None
+
+
+def _longest_silent_attrs(metrics: LogShedMetrics) -> dict[str, Any]:
+    quietest = _longest_silent(metrics)
+    return {
+        "source_name": quietest["name"] if quietest else None,
+        "source_count": len(metrics.sources or []),
+        "sources": _sources_by_silence(metrics),
+    }
 
 
 SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
@@ -190,6 +229,31 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         suggested_display_precision=0,
         value_fn=lambda metrics: metrics.maintenance_remaining_seconds,
     ),
+    LogShedSensorEntityDescription(
+        key="longest_silent_source",
+        translation_key="longest_silent_source",
+        icon="mdi:timer-sand",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda metrics: (
+            _parse_time(quietest["last_seen"]) if (quietest := _longest_silent(metrics)) else None
+        ),
+        extra_attrs_fn=_longest_silent_attrs,
+        exists_fn=lambda metrics: metrics.sources is not None,
+    ),
+    LogShedSensorEntityDescription(
+        key="last_backup",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        translation_key="last_backup",
+        icon="mdi:database-export",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda metrics: (
+            _parse_time(metrics.last_backup["created_at"]) if metrics.last_backup else None
+        ),
+        extra_attrs_fn=lambda metrics: {
+            "size_bytes": metrics.last_backup["size_bytes"] if metrics.last_backup else None,
+        },
+        exists_fn=lambda metrics: metrics.reports_last_backup,
+    ),
 )
 
 
@@ -200,15 +264,34 @@ async def async_setup_entry(
 ) -> None:
     """Set up LogShed sensor entities based on a config entry."""
     coordinator = entry.runtime_data.coordinator
-    async_add_entities(
-        LogShedSensorEntity(coordinator, description) for description in SENSOR_DESCRIPTIONS
-    )
+    added: set[str] = set()
+
+    @callback
+    def _add_reported_sensors() -> None:
+        """Add each sensor whose data LogShed reports, also after LogShed is upgraded."""
+        if not coordinator.data:
+            return
+        new = [
+            LogShedSensorEntity(coordinator, description)
+            for description in SENSOR_DESCRIPTIONS
+            if description.key not in added
+            and (description.exists_fn is None or description.exists_fn(coordinator.data))
+        ]
+        added.update(entity.entity_description.key for entity in new)
+        if new:
+            async_add_entities(new)
+
+    async_add_entities([LogShedServerStatusSensor(coordinator)])
+    _add_reported_sensors()
+    entry.async_on_unload(coordinator.async_add_listener(_add_reported_sensors))
 
 
 class LogShedSensorEntity(LogShedEntity, SensorEntity):
     """Representation of a LogShed sensor."""
 
     entity_description: LogShedSensorEntityDescription
+    # Longest Silent Source's list of every source changes on most polls; keep it out of the recorder
+    _unrecorded_attributes = frozenset({"sources"})
 
     def __init__(
         self,
@@ -232,3 +315,43 @@ class LogShedSensorEntity(LogShedEntity, SensorEntity):
         if not self.coordinator.data or not self.entity_description.extra_attrs_fn:
             return None
         return self.entity_description.extra_attrs_fn(self.coordinator.data)
+
+
+class LogShedServerStatusSensor(LogShedEntity, SensorEntity):
+    """Whether LogShed is running, upgrading its database, in recovery, failing or unreachable."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_options = SERVER_STATUSES
+    _attr_translation_key = "server_status"
+    _attr_icon = "mdi:server"
+
+    def __init__(self, coordinator: LogShedDataUpdateCoordinator) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, "server_status")
+
+    @property
+    def available(self) -> bool:
+        """Stay available when polling fails: that is what this sensor reports."""
+        return True
+
+    @property
+    def native_value(self) -> str:
+        """Return the server status."""
+        return self.coordinator.server_status
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the upgrade stage and progress while upgrading or in recovery."""
+        upgrade = self.coordinator.upgrade
+        if self.coordinator.server_status not in (SERVER_UPGRADING, SERVER_RECOVERY):
+            return None
+        upgrade = upgrade or {}
+        return {
+            "stage": upgrade.get("stage"),
+            "done": upgrade.get("done"),
+            "total": upgrade.get("total"),
+            "from_schema": upgrade.get("from_schema"),
+            "target_schema": upgrade.get("target_schema"),
+            "failed_at": upgrade.get("failed_at"),
+        }

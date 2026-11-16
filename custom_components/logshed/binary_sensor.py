@@ -16,7 +16,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import LogShedMetrics
-from .coordinator import LogShedConfigEntry, LogShedDataUpdateCoordinator
+from .coordinator import (
+    SERVER_RECOVERY,
+    SERVER_UPGRADING,
+    LogShedConfigEntry,
+    LogShedDataUpdateCoordinator,
+)
 from .entity import LogShedEntity
 
 
@@ -63,7 +68,11 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[LogShedBinarySensorEntityDescription, ...] = (
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:server-network",
-        is_on_fn=lambda coordinator: coordinator.last_update_success,
+        # LogShed answers while it upgrades its database or waits in recovery
+        is_on_fn=lambda coordinator: (
+            coordinator.last_update_success
+            or coordinator.server_status in (SERVER_UPGRADING, SERVER_RECOVERY)
+        ),
         always_available=True,
     ),
 )

@@ -22,6 +22,7 @@ from homeassistant.core import HomeAssistant
 from custom_components.logshed.api import (
     LogShedApiClient,
     LogShedAuthInfo,
+    LogShedHealth,
     LogShedMetrics,
     LogShedVersion,
 )
@@ -106,6 +107,44 @@ MOCK_SYSTEM_METRICS_RESPONSE: dict[str, Any] = {
 }
 
 
+# The fields LogShed 1.4.0 adds to the metrics response
+MOCK_METRICS_140_FIELDS: dict[str, Any] = {
+    "sources": [
+        {
+            "name": "nas",
+            "kind": "alias",
+            "address": "10.0.0.5",
+            "last_seen": "2026-11-16T10:00:00+00:00",
+        },
+        {"name": "printer", "kind": "alias", "address": "10.0.0.9", "last_seen": None},
+        {
+            "name": "Media server",
+            "kind": "docker",
+            "address": "10.0.0.20",
+            "last_seen": "2026-11-16T07:30:00.250000+00:00",
+        },
+    ],
+    "last_backup": {"created_at": "2026-11-10T08:00:00+00:00", "size_bytes": 1234567},
+}
+MOCK_SYSTEM_METRICS_140_RESPONSE: dict[str, Any] = {
+    **MOCK_SYSTEM_METRICS_RESPONSE,
+    "version": "1.4.0",
+    **MOCK_METRICS_140_FIELDS,
+}
+
+MOCK_HEALTH_UPGRADING_RESPONSE: dict[str, Any] = {
+    "status": "upgrading",
+    "upgrade": {
+        "stage": "migrate",
+        "done": 2,
+        "total": 5,
+        "from_schema": 3,
+        "target_schema": 4,
+        "failed_at": None,
+    },
+}
+
+
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Enable custom integrations for all tests."""
@@ -162,6 +201,7 @@ def mock_api_client(
     )
     client.async_verify_auth = AsyncMock(return_value=mock_auth_info)
     client.async_get_system_metrics = AsyncMock(return_value=mock_metrics)
+    client.async_get_health = AsyncMock(return_value=LogShedHealth.from_dict({"status": "ok"}))
     client.async_get_version = AsyncMock(
         return_value=LogShedVersion.from_dict(MOCK_VERSION_RESPONSE)
     )

@@ -105,6 +105,38 @@
       },
       "maintenance_remaining": {
         "name": "Maintenance Remaining"
+      },
+      "longest_silent_source": {
+        "name": "Longest Silent Source",
+        "state_attributes": {
+          "source_name": {
+            "name": "Source"
+          },
+          "source_count": {
+            "name": "Sources"
+          },
+          "sources": {
+            "name": "All sources"
+          }
+        }
+      },
+      "last_backup": {
+        "name": "Last Backup",
+        "state_attributes": {
+          "size_bytes": {
+            "name": "Size (bytes)"
+          }
+        }
+      },
+      "server_status": {
+        "name": "Server Status",
+        "state": {
+          "running": "Running",
+          "upgrading": "Upgrading database",
+          "recovery": "Recovery needed",
+          "error": "Error",
+          "unreachable": "Unreachable"
+        }
       }
     },
     "binary_sensor": {

@@ -51,6 +51,7 @@ SCOPE_MAINTENANCE_WRITE: Final = "maintenance:write"
 
 # API Endpoints
 ENDPOINT_AUTH_VERIFY: Final = "/api/v1/auth/verify"
+ENDPOINT_HEALTH: Final = "/api/health"
 ENDPOINT_SYSTEM_METRICS: Final = "/api/v1/system/metrics"
 ENDPOINT_SYSTEM_VERSION: Final = "/api/v1/system/version"
 ENDPOINT_MAINTENANCE_ENABLE: Final = "/api/v1/maintenance/enable"

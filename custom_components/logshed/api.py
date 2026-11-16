@@ -13,6 +13,7 @@ from homeassistant.exceptions import HomeAssistantError
 from .const import (
     DEFAULT_REQUEST_TIMEOUT,
     ENDPOINT_AUTH_VERIFY,
+    ENDPOINT_HEALTH,
     ENDPOINT_MAINTENANCE_DISABLE,
     ENDPOINT_MAINTENANCE_ENABLE,
     ENDPOINT_SYSTEM_METRICS,
@@ -49,6 +50,11 @@ class LogShedCannotConnect(LogShedError):
     Raised for network failures, and for 502, 503 and 504: a reverse proxy answers those while
     LogShed restarts, and LogShed itself answers 503 while it upgrades its database.
     """
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        # The HTTP status of a 502, 503 or 504 answer; None for a network failure
+        self.status = status
 
 
 class LogShedOperationTimeout(LogShedError):
@@ -131,6 +137,11 @@ class LogShedMetrics:
     maintenance_remaining_seconds: int
     maintenance_active_sessions_count: int
     maintenance_log_handling: str
+    # LogShed 1.4.0 and later: the configured sources and when each last sent a log (None before)
+    sources: list[dict[str, Any]] | None = None
+    # LogShed 1.4.0 and later report last_backup, None when there is no backup yet
+    reports_last_backup: bool = False
+    last_backup: dict[str, Any] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> LogShedMetrics:
@@ -140,6 +151,8 @@ class LogShedMetrics:
         alert = data.get("alert_state") or {}
         maint = data.get("maintenance") or {}
         severity = data.get("severity_counts_24h") or {}
+        sources = data.get("sources")
+        last_backup = data.get("last_backup")
 
         top_apps = [
             {"name": item.get("name", ""), "count": item.get("count", 0)}
@@ -182,6 +195,47 @@ class LogShedMetrics:
             maintenance_remaining_seconds=int(maint.get("remaining_seconds", 0)),
             maintenance_active_sessions_count=int(maint.get("active_sessions_count", 0)),
             maintenance_log_handling=str(maint.get("log_handling", "silence_alerts")),
+            sources=(
+                [
+                    {
+                        "name": str(item.get("name", "")),
+                        "kind": str(item.get("kind", "")),
+                        "address": str(item.get("address", "")),
+                        "last_seen": item.get("last_seen"),
+                    }
+                    for item in sources
+                    if isinstance(item, dict)
+                ]
+                if isinstance(sources, list)
+                else None
+            ),
+            reports_last_backup="last_backup" in data,
+            last_backup=(
+                {
+                    "created_at": last_backup.get("created_at"),
+                    "size_bytes": int(last_backup.get("size_bytes", 0)),
+                }
+                if isinstance(last_backup, dict)
+                else None
+            ),
+        )
+
+
+@dataclass
+class LogShedHealth:
+    """Parsed answer of /api/health: whether LogShed is running, upgrading or in recovery."""
+
+    status: str
+    # Upgrade stage and progress while status is "upgrading" or "migration_failed"
+    upgrade: dict[str, Any] | None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> LogShedHealth:
+        """Create LogShedHealth from API response dictionary."""
+        upgrade = data.get("upgrade")
+        return cls(
+            status=str(data.get("status", "")),
+            upgrade=upgrade if isinstance(upgrade, dict) else None,
         )
 
 
@@ -301,7 +355,8 @@ class LogShedApiClient:
                     raise LogShedCannotConnect(
                         await self._error_detail(
                             response, f"LogShed returned {status} (it may be restarting)"
-                        )
+                        ),
+                        status=status,
                     )
 
                 if status >= 500:
@@ -347,6 +402,11 @@ class LogShedApiClient:
         """Fetch system metrics and telemetry from LogShed."""
         data = await self._request("GET", ENDPOINT_SYSTEM_METRICS)
         return LogShedMetrics.from_dict(data)
+
+    async def async_get_health(self) -> LogShedHealth:
+        """Fetch LogShed's health status, which also answers while it upgrades its database."""
+        data = await self._request("GET", ENDPOINT_HEALTH)
+        return LogShedHealth.from_dict(data)
 
     async def async_get_version(self) -> LogShedVersion:
         """Fetch the installed version and the latest stable release from LogShed."""

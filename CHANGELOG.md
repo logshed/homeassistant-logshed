@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Longest Silent Source sensor (`timestamp`): when the configured source (host alias or enabled Docker host) that has been silent longest last sent a log, with its name, the number of sources and every source's last-seen time as attributes. Needs LogShed 1.4.0.
+- Last Backup sensor (`timestamp`, diagnostic): when LogShed made its newest database backup, with its size in bytes as an attribute. Needs LogShed 1.4.0.
+- Server Status sensor (diagnostic): `running`, `upgrading` (with the upgrade stage and progress), `recovery`, `error` or `unreachable`, and never unavailable. LogShed 1.4.0 reports its database upgrades and recovery mode.
+- Diagnostics leave out the source addresses.
+- The sensors that need LogShed 1.4.0 appear on the first poll after LogShed is upgraded, without reloading the integration.
+
 ### Changed
+- Connectivity stays on while LogShed upgrades its database or waits in recovery, since LogShed still answers; the log says "LogShed is upgrading its database" instead of a connection error.
 - The `logshed.enable_maintenance` action and the README say what `target_app` and `target_host` do with LogShed 1.4.0: a session with a target holds back only that target's alerts.
 
 ### Removed

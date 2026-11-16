@@ -26,7 +26,10 @@ from custom_components.logshed.const import DEFAULT_REQUEST_TIMEOUT, LONG_OPERAT
 
 from .conftest import (
     MOCK_AUTH_VERIFY_RESPONSE,
+    MOCK_HEALTH_UPGRADING_RESPONSE,
     MOCK_HOST,
+    MOCK_METRICS_140_FIELDS,
+    MOCK_SYSTEM_METRICS_140_RESPONSE,
     MOCK_SYSTEM_METRICS_RESPONSE,
     MOCK_TOKEN,
     MOCK_VERSION_RESPONSE,
@@ -287,6 +290,49 @@ async def test_api_long_operation_timeout_may_still_run() -> None:
         await client.async_trigger_vacuum()
     with pytest.raises(LogShedCannotConnect, match="Timeout"):
         await client.async_get_system_metrics()
+
+
+def test_metrics_sources_and_last_backup() -> None:
+    """LogShed 1.4.0's sources and last backup parse; older servers report neither."""
+    metrics = LogShedMetrics.from_dict(MOCK_SYSTEM_METRICS_140_RESPONSE)
+    assert metrics.sources == MOCK_METRICS_140_FIELDS["sources"]
+    assert metrics.reports_last_backup is True
+    assert metrics.last_backup == {"created_at": "2026-11-10T08:00:00+00:00", "size_bytes": 1234567}
+
+    older = LogShedMetrics.from_dict(MOCK_SYSTEM_METRICS_RESPONSE)
+    assert older.sources is None
+    assert older.reports_last_backup is False
+    assert older.last_backup is None
+
+    # No backup yet: reported, but empty
+    no_backup = LogShedMetrics.from_dict({**MOCK_SYSTEM_METRICS_140_RESPONSE, "last_backup": None})
+    assert no_backup.reports_last_backup is True
+    assert no_backup.last_backup is None
+
+
+async def test_api_get_health_and_status_of_cannot_connect() -> None:
+    """The health answer parses, and LogShedCannotConnect keeps the status of an HTTP answer."""
+    session = AsyncMock()
+    client = LogShedApiClient(MOCK_HOST, MOCK_TOKEN, session)
+
+    session.request = AsyncMock(return_value=_mock_response(200, MOCK_HEALTH_UPGRADING_RESPONSE))
+    health = await client.async_get_health()
+    assert health.status == "upgrading"
+    assert health.upgrade == MOCK_HEALTH_UPGRADING_RESPONSE["upgrade"]
+    assert session.request.call_args.kwargs["url"] == f"{MOCK_HOST}/api/health"
+
+    session.request = AsyncMock(return_value=_mock_response(200, {"status": "ok"}))
+    assert (await client.async_get_health()).upgrade is None
+
+    session.request = AsyncMock(return_value=_mock_response(503))
+    with pytest.raises(LogShedCannotConnect) as exc_info:
+        await client.async_get_system_metrics()
+    assert exc_info.value.status == 503
+
+    session.request = AsyncMock(side_effect=TimeoutError())
+    with pytest.raises(LogShedCannotConnect) as exc_info:
+        await client.async_get_system_metrics()
+    assert exc_info.value.status is None
 
 
 def test_metrics_udp_receive_errors() -> None:

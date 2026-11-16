@@ -12,6 +12,8 @@ from .const import CONF_API_TOKEN
 from .coordinator import LogShedConfigEntry
 
 TO_REDACT = {CONF_API_TOKEN}
+# Source addresses are the user's network layout; diagnostics end up in public issues
+METRICS_TO_REDACT = {"address"}
 
 
 async def async_get_config_entry_diagnostics(
@@ -27,7 +29,13 @@ async def async_get_config_entry_diagnostics(
         },
         "scopes": runtime.scopes,
         "last_update_success": coordinator.last_update_success,
-        "metrics": asdict(coordinator.data) if coordinator.data else None,
+        "server_status": coordinator.server_status,
+        "upgrade": coordinator.upgrade,
+        "metrics": (
+            async_redact_data(asdict(coordinator.data), METRICS_TO_REDACT)
+            if coordinator.data
+            else None
+        ),
         "version": (
             asdict(runtime.version_coordinator.data)
             if runtime.version_coordinator and runtime.version_coordinator.data

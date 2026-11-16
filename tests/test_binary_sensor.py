@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+import pytest
 from homeassistant.const import EntityCategory, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.logshed.api import LogShedApiClient, LogShedCannotConnect
+from custom_components.logshed.api import LogShedApiClient, LogShedCannotConnect, LogShedHealth
 
-from .conftest import setup_integration
+from .conftest import MOCK_HEALTH_UPGRADING_RESPONSE, setup_integration
 
 
 async def test_binary_sensors_state_and_attributes(
@@ -62,4 +63,29 @@ async def test_connectivity_turns_off_when_polling_fails(
     await hass.async_block_till_done()
 
     assert hass.states.get("binary_sensor.logshed_connectivity").state == "off"
+    assert hass.states.get("binary_sensor.logshed_alert_state").state == "unavailable"
+
+
+@pytest.mark.parametrize("health_status", ["upgrading", "migration_failed"])
+async def test_connectivity_stays_on_while_logshed_upgrades(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+    health_status: str,
+) -> None:
+    """LogShed answers while it upgrades its database or waits in recovery: Connectivity stays on."""
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.BINARY_SENSOR])
+
+    mock_api_client.async_get_system_metrics = AsyncMock(
+        side_effect=LogShedCannotConnect("LogShed is upgrading its database.", status=503)
+    )
+    mock_api_client.async_get_health = AsyncMock(
+        return_value=LogShedHealth.from_dict(
+            {**MOCK_HEALTH_UPGRADING_RESPONSE, "status": health_status}
+        )
+    )
+    await mock_config_entry.runtime_data.coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("binary_sensor.logshed_connectivity").state == "on"
     assert hass.states.get("binary_sensor.logshed_alert_state").state == "unavailable"

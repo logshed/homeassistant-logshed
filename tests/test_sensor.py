@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.const import EntityCategory, Platform
@@ -10,9 +10,18 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.logshed.api import LogShedApiClient, LogShedMetrics
+from custom_components.logshed.api import (
+    LogShedApiClient,
+    LogShedCannotConnect,
+    LogShedHealth,
+    LogShedMetrics,
+)
 
-from .conftest import setup_integration
+from .conftest import (
+    MOCK_HEALTH_UPGRADING_RESPONSE,
+    MOCK_SYSTEM_METRICS_140_RESPONSE,
+    setup_integration,
+)
 
 
 async def test_sensors_state_and_attributes(
@@ -150,9 +159,11 @@ async def test_sensors_state_and_attributes(
         "dropped_logs",
         "filtered_logs",
         "udp_lost",
+        "server_status",
     }
+    # 17 from the metrics and Server Status; LogShed 1.3.x reports no sources or backups
     sensor_entries = er.async_entries_for_config_entry(entity_reg, mock_config_entry.entry_id)
-    assert len(sensor_entries) == 17
+    assert len(sensor_entries) == 18
     for reg_entry in sensor_entries:
         key = reg_entry.unique_id.removeprefix(f"{mock_metrics.instance_id}_")
         expected = EntityCategory.DIAGNOSTIC if key in diagnostic else None
@@ -185,3 +196,140 @@ async def test_udp_lost_unknown_when_not_reported(
     await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
 
     assert hass.states.get("sensor.logshed_udp_lost").state == "unknown"
+
+
+async def test_new_sensors_need_the_server_data(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """LogShed 1.3.x reports no sources or backups: those sensors are not created."""
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
+
+    assert hass.states.get("sensor.logshed_longest_silent_source") is None
+    assert hass.states.get("sensor.logshed_last_backup") is None
+    assert hass.states.get("sensor.logshed_server_status").state == "running"
+
+
+async def test_longest_silent_source_and_last_backup(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """The longest-silent source's last log is the state; never-seen sources are listed last."""
+    mock_api_client.async_get_system_metrics = AsyncMock(
+        return_value=LogShedMetrics.from_dict(MOCK_SYSTEM_METRICS_140_RESPONSE)
+    )
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
+    entity_reg = er.async_get(hass)
+
+    state = hass.states.get("sensor.logshed_longest_silent_source")
+    assert state.state == "2026-11-16T07:30:00+00:00"
+    assert state.attributes["device_class"] == "timestamp"
+    assert state.attributes["source_name"] == "Media server"
+    assert state.attributes["source_count"] == 3
+    assert [s["name"] for s in state.attributes["sources"]] == ["Media server", "nas", "printer"]
+    # The list changes on most polls, so it stays out of the recorder
+    assert "sources" in state.state_info["unrecorded_attributes"]
+    entry = entity_reg.async_get("sensor.logshed_longest_silent_source")
+    assert entry.entity_category is None
+
+    state = hass.states.get("sensor.logshed_last_backup")
+    assert state.state == "2026-11-10T08:00:00+00:00"
+    assert state.attributes["size_bytes"] == 1234567
+    entry = entity_reg.async_get("sensor.logshed_last_backup")
+    assert entry.entity_category == EntityCategory.DIAGNOSTIC
+
+
+async def test_new_sensors_unknown_without_data(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """No source seen since 1.4.0 and no backup yet: both sensors exist, unknown."""
+    data = {
+        **MOCK_SYSTEM_METRICS_140_RESPONSE,
+        "sources": [{"name": "nas", "kind": "syslog", "address": "10.0.0.5", "last_seen": None}],
+        "last_backup": None,
+    }
+    mock_api_client.async_get_system_metrics = AsyncMock(
+        return_value=LogShedMetrics.from_dict(data)
+    )
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
+
+    state = hass.states.get("sensor.logshed_longest_silent_source")
+    assert state.state == "unknown"
+    assert state.attributes["source_name"] is None
+    assert state.attributes["source_count"] == 1
+    state = hass.states.get("sensor.logshed_last_backup")
+    assert state.state == "unknown"
+    assert state.attributes["size_bytes"] is None
+
+
+async def test_new_sensors_appear_when_logshed_is_upgraded(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """Upgrading LogShed from 1.3.x adds the sensors on the next poll, without a reload."""
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
+    assert hass.states.get("sensor.logshed_last_backup") is None
+
+    mock_api_client.async_get_system_metrics = AsyncMock(
+        return_value=LogShedMetrics.from_dict(MOCK_SYSTEM_METRICS_140_RESPONSE)
+    )
+    await mock_config_entry.runtime_data.coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.logshed_last_backup").state == "2026-11-10T08:00:00+00:00"
+    assert hass.states.get("sensor.logshed_longest_silent_source") is not None
+
+    # A later poll adds nothing twice
+    await mock_config_entry.runtime_data.coordinator.async_refresh()
+    await hass.async_block_till_done()
+    entries = er.async_entries_for_config_entry(er.async_get(hass), mock_config_entry.entry_id)
+    assert len(entries) == len(hass.states.async_all("sensor")) == 20
+
+
+async def test_server_status_while_upgrading(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """While LogShed upgrades, Server Status says so with the progress; figures are unavailable."""
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
+    entity_reg = er.async_get(hass)
+    entry = entity_reg.async_get("sensor.logshed_server_status")
+    assert entry.entity_category == EntityCategory.DIAGNOSTIC
+    assert hass.states.get("sensor.logshed_server_status").attributes["options"] == [
+        "running",
+        "upgrading",
+        "recovery",
+        "error",
+        "unreachable",
+    ]
+
+    mock_api_client.async_get_system_metrics = AsyncMock(
+        side_effect=LogShedCannotConnect("LogShed is upgrading its database.", status=503)
+    )
+    mock_api_client.async_get_health = AsyncMock(
+        return_value=LogShedHealth.from_dict(MOCK_HEALTH_UPGRADING_RESPONSE)
+    )
+    await mock_config_entry.runtime_data.coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.logshed_server_status")
+    assert state.state == "upgrading"
+    assert state.attributes["stage"] == "migrate"
+    assert (state.attributes["done"], state.attributes["total"]) == (2, 5)
+    assert hass.states.get("sensor.logshed_ingestion_rate").state == "unavailable"
+
+    # LogShed down: unreachable, still available, no progress
+    mock_api_client.async_get_system_metrics = AsyncMock(
+        side_effect=LogShedCannotConnect("Timeout connecting to LogShed")
+    )
+    await mock_config_entry.runtime_data.coordinator.async_refresh()
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.logshed_server_status")
+    assert state.state == "unreachable"
+    assert "stage" not in state.attributes

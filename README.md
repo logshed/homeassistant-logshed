@@ -18,7 +18,8 @@ Connects your Home Assistant instance with your self-hosted [LogShed](https://gi
 - **Automated Maintenance Integration:** Native switches and service actions (`logshed.enable_maintenance`, `logshed.disable_maintenance`) for backup hooks (Home Assistant Backups, Proxmox VE backups, restic, Borg) to silence alerts or drop error floods during scheduled backup routines.
 - **Diagnostic Controls:** On-demand database compaction (`VACUUM`) and retention pruning buttons directly within Home Assistant.
 - **Update Notifications:** An update entity shows when a newer stable LogShed release is available.
-- **Diagnostics:** Download config entry diagnostics (API token redacted) from the integration page for troubleshooting.
+- **Sources and Server Health:** When the longest-silent configured source last sent a log, when the newest backup was made, and whether LogShed is running, upgrading its database or waiting in recovery (LogShed 1.4.0 or later for sources, backups and upgrades).
+- **Diagnostics:** Download config entry diagnostics (API token and source addresses redacted) from the integration page for troubleshooting.
 
 ---
 
@@ -55,7 +56,7 @@ The button opens LogShed in the Marketplace on Home Assistant 2026.11 and later,
 ## Requirements
 
 - Home Assistant **2024.12.0** or later.
-- LogShed server **1.3.0** or later.
+- LogShed server **1.3.0** or later. Longest Silent Source, Last Backup, and the upgrading and recovery states of Server Status need LogShed **1.4.0**.
 
 ---
 
@@ -116,6 +117,7 @@ The rolling counts are gauges (`measurement`) that rise and fall as logs age out
 | `sensor.logshed_warning_logs_24h` | Warning Logs 24h | `logs` | `measurement` | Rolling 24-hour count of warning (severity 4) logs. |
 | `sensor.logshed_total_logs` | Total Logs | `logs` | `measurement` | Current count of stored logs in the database. |
 | `sensor.logshed_maintenance_remaining`| Maintenance Remaining| `min` | `duration` | Time remaining in the current active maintenance window. Reported in seconds and shown in whole minutes by default; change the unit in the entity settings. |
+| `sensor.logshed_longest_silent_source` | Longest Silent Source | | `timestamp` | When the configured source (a host alias or an enabled Docker host in LogShed's Settings > Sources) that has been silent longest last sent a log, shown as "3 hours ago". Attributes: `source_name` (that source), `source_count` and `sources` (every source with its `name`, `kind` (`alias` for a host alias, `docker` for a Docker host), `address` and `last_seen`, the longest silent first; sources with no log since LogShed 1.4.0 come last and do not count for the state). `sources` is not kept in the recorder. Unknown when no source has sent a log yet. Needs LogShed 1.4.0; it appears on the first poll after LogShed is upgraded. |
 
 ### Diagnostic Sensors
 
@@ -129,6 +131,8 @@ Server health sensors are in the **Diagnostic** card on the device page, so the 
 | `sensor.logshed_queue_depth` | Queue Depth | `messages` | `measurement` | Pending messages in the in-memory ring buffer. |
 | `sensor.logshed_dropped_logs` | Dropped Logs | `logs` | `total_increasing` | Logs dropped due to ring buffer overflow. |
 | `sensor.logshed_filtered_logs` | Filtered Logs | `logs` | `total_increasing` | Logs discarded by active drop rules or maintenance filters. |
+| `sensor.logshed_last_backup` | Last Backup | | `timestamp` | When LogShed made its newest database backup (before an upgrade, or from its web UI), with the archive's size in bytes as the `size_bytes` attribute. Unknown when there is no backup. Needs LogShed 1.4.0. |
+| `sensor.logshed_server_status` | Server Status | | `enum` | `running`, `upgrading` (LogShed is upgrading its database after an update, with `stage`, `done`, `total`, `from_schema` and `target_schema` attributes), `recovery` (an upgrade stopped: open LogShed's web UI to retry it; the same attributes and `failed_at`), `error` (LogShed answers but its metrics fail, or it refuses the API token) or `unreachable`. Never unavailable. Upgrades and recovery show with LogShed 1.4.0 or later. |
 | `sensor.logshed_udp_lost` | UDP Lost | `datagrams` | `total_increasing` | UDP syslog datagrams the kernel discarded because LogShed's receive buffer was full. Counts from when LogShed started and goes back to 0 when it restarts. With `network_mode: host` it covers every UDP socket on the host. Unknown when LogShed cannot read the counter (not Linux, or before the syslog listener starts). If it keeps rising, see [Sending Logs](https://github.com/logshed/logshed/blob/main/docs/SENDING_LOGS.md) on choosing UDP or TCP syslog. |
 
 ### Binary Sensors
@@ -137,7 +141,7 @@ Server health sensors are in the **Diagnostic** card on the device page, so the 
 | :--- | :--- | :--- | :--- |
 | `binary_sensor.logshed_alert_state` | Alert State | `problem` | **`on`** when any alert rule triggered in the sliding 15-minute window. Daily digests, on-demand AI analyses and maintenance windows do not turn it on. |
 | `binary_sensor.logshed_maintenance_active` | Maintenance Active | None | **`on`** when any maintenance is active: on-demand sessions from any source (Home Assistant, the LogShed web UI, MCP clients) and scheduled windows. |
-| `binary_sensor.logshed_connectivity` | Connectivity | `connectivity` | **`on`** when Home Assistant reaches LogShed, **`off`** when polling fails (it never becomes unavailable). Diagnostic entity. |
+| `binary_sensor.logshed_connectivity` | Connectivity | `connectivity` | **`on`** when Home Assistant reaches LogShed, including while LogShed upgrades its database or waits in recovery; **`off`** when polling fails otherwise (it never becomes unavailable). Diagnostic entity. While LogShed upgrades, the other entities are unavailable: LogShed has no figures until it finishes. |
 
 ### Switches & Buttons
 
@@ -243,6 +247,27 @@ entities:
 ---
 
 ## Automation Recipes
+
+### A Source Goes Quiet
+
+Get a notification when a configured source has sent nothing for an hour:
+
+```yaml
+alias: "LogShed: Source Gone Quiet"
+description: "Notify when a LogShed source has been silent for an hour"
+trigger:
+  - platform: template
+    value_template: >-
+      {{ states('sensor.logshed_longest_silent_source') not in ['unknown', 'unavailable']
+         and now() - as_datetime(states('sensor.logshed_longest_silent_source')) > timedelta(hours=1) }}
+action:
+  - action: notify.persistent_notification
+    data:
+      title: "LogShed source silent"
+      message: >-
+        {{ state_attr('sensor.logshed_longest_silent_source', 'source_name') }} has sent no log
+        since {{ states('sensor.logshed_longest_silent_source') }}.
+```
 
 ### Incident Warning Light
 
