@@ -41,13 +41,13 @@ enable_maintenance:
               value: drop_errors
     target_app:
       name: Target App / Container
-      description: Optional: only this application or container. On LogShed 1.4.0 or later only its alerts are held back; on 1.3.x it only limits which errors are dropped.
+      description: "Optional: only this application or container. On LogShed 1.4.0 or later only its alerts are held back; on 1.3.x it only limits which errors are dropped."
       required: false
       selector:
         text:
     target_host:
       name: Target Host
-      description: Optional: only this host (name or IP). On LogShed 1.4.0 or later only its alerts are held back; on 1.3.x it only limits which errors are dropped.
+      description: "Optional: only this host (name or IP). On LogShed 1.4.0 or later only its alerts are held back; on 1.3.x it only limits which errors are dropped."
       required: false
       selector:
         text:
