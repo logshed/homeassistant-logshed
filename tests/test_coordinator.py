@@ -16,6 +16,7 @@ from custom_components.logshed.api import (
     LogShedCannotConnect,
     LogShedInvalidAuth,
     LogShedMetrics,
+    LogShedServerError,
 )
 from custom_components.logshed.const import (
     CONF_API_TOKEN,
@@ -23,7 +24,10 @@ from custom_components.logshed.const import (
     CONF_VERIFY_SSL,
     DOMAIN,
 )
-from custom_components.logshed.coordinator import LogShedDataUpdateCoordinator
+from custom_components.logshed.coordinator import (
+    LogShedDataUpdateCoordinator,
+    LogShedVersionCoordinator,
+)
 
 from .conftest import MOCK_HOST, MOCK_INSTANCE_ID, MOCK_TOKEN
 
@@ -72,6 +76,45 @@ async def test_coordinator_update_network_failure(
 
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
+
+
+async def test_coordinator_server_error_is_not_unexpected(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """A LogShed error becomes UpdateFailed with its own message, not "Unexpected error"."""
+    mock_api_client.async_get_system_metrics = AsyncMock(
+        side_effect=LogShedServerError("Internal database crash")
+    )
+    mock_api_client.async_get_version = AsyncMock(
+        side_effect=LogShedServerError("Internal database crash")
+    )
+    coordinator = LogShedDataUpdateCoordinator(hass, mock_api_client, mock_config_entry)
+    version_coordinator = LogShedVersionCoordinator(hass, mock_api_client, mock_config_entry)
+
+    for coord in (coordinator, version_coordinator):
+        with pytest.raises(
+            UpdateFailed, match="LogShed error: Internal database crash"
+        ) as exc_info:
+            await coord._async_update_data()
+        assert "Unexpected" not in str(exc_info.value)
+
+
+async def test_coordinator_lets_bugs_through(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """A bug is not turned into a one-line UpdateFailed, so Home Assistant logs its traceback."""
+    mock_api_client.async_get_system_metrics = AsyncMock(side_effect=KeyError("version"))
+    mock_api_client.async_get_version = AsyncMock(side_effect=KeyError("version"))
+    coordinator = LogShedDataUpdateCoordinator(hass, mock_api_client, mock_config_entry)
+    version_coordinator = LogShedVersionCoordinator(hass, mock_api_client, mock_config_entry)
+
+    for coord in (coordinator, version_coordinator):
+        with pytest.raises(KeyError):
+            await coord._async_update_data()
 
 
 async def test_coordinator_custom_scan_interval(

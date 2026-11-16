@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Duplicate brand images (`icon.png` and `logo.png` at the repository root and in `custom_components/logshed/`). Home Assistant uses only `custom_components/logshed/brand/`.
 
+### Fixed
+- A reverse proxy's 502, 503 or 504 while LogShed restarts is logged as "Cannot connect to LogShed: LogShed returned 502 (it may be restarting)" instead of "Unexpected error communicating with LogShed", and setting up an entry at that moment reports that LogShed cannot be reached. Other LogShed errors are logged as "LogShed error: ...", and a fault in the integration itself is logged with its traceback.
+
 ## [1.0.0] - 2026-11-09
 
 ### Added

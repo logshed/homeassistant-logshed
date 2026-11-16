@@ -166,6 +166,27 @@ async def test_api_error_mappings() -> None:
         await client.async_get_system_metrics()
 
 
+@pytest.mark.parametrize("status", [502, 503, 504])
+async def test_api_gateway_statuses_mean_cannot_connect(status: int) -> None:
+    """A proxy's 502 to 504 while LogShed restarts means LogShed could not be reached."""
+    session = AsyncMock()
+    client = LogShedApiClient(MOCK_HOST, MOCK_TOKEN, session)
+
+    # A reverse proxy's error page is HTML, not JSON
+    session.request = AsyncMock(return_value=_mock_response(status))
+    with pytest.raises(
+        LogShedCannotConnect, match=f"LogShed returned {status} \\(it may be restarting\\)"
+    ):
+        await client.async_get_system_metrics()
+
+    # LogShed's own answer keeps its detail
+    session.request = AsyncMock(
+        return_value=_mock_response(status, {"detail": "LogShed is upgrading its database."})
+    )
+    with pytest.raises(LogShedCannotConnect, match="upgrading its database"):
+        await client.async_get_system_metrics()
+
+
 async def test_api_network_exceptions() -> None:
     """Test network connection error handling in API client."""
     session = AsyncMock()

@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import (
     LogShedApiClient,
     LogShedCannotConnect,
+    LogShedError,
     LogShedInvalidAuth,
     LogShedMetrics,
     LogShedNotFound,
@@ -73,8 +74,8 @@ class LogShedDataUpdateCoordinator(DataUpdateCoordinator[LogShedMetrics]):
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except LogShedCannotConnect as err:
             raise UpdateFailed(f"Cannot connect to LogShed: {err}") from err
-        except Exception as err:
-            raise UpdateFailed(f"Unexpected error communicating with LogShed: {err}") from err
+        except LogShedError as err:
+            raise UpdateFailed(f"LogShed error: {err}") from err
 
 
 class LogShedVersionCoordinator(DataUpdateCoordinator[LogShedVersion]):
@@ -111,5 +112,5 @@ class LogShedVersionCoordinator(DataUpdateCoordinator[LogShedVersion]):
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except LogShedCannotConnect as err:
             raise UpdateFailed(f"Cannot connect to LogShed: {err}") from err
-        except Exception as err:
-            raise UpdateFailed(f"Unexpected error communicating with LogShed: {err}") from err
+        except LogShedError as err:
+            raise UpdateFailed(f"LogShed error: {err}") from err

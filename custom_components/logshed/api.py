@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
@@ -25,6 +25,10 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+# A gateway could not reach LogShed, or LogShed is starting or upgrading
+GATEWAY_STATUSES: Final = (502, 503, 504)
+
+
 def has_scope(granted_scopes: list[str], target: str) -> bool:
     """Check if target scope is covered by granted scopes."""
     if "*" in granted_scopes:
@@ -40,7 +44,11 @@ class LogShedError(HomeAssistantError):
 
 
 class LogShedCannotConnect(LogShedError):
-    """Exception raised when unable to connect to LogShed."""
+    """Exception raised when LogShed cannot be reached.
+
+    Raised for network failures, and for 502, 503 and 504: a reverse proxy answers those while
+    LogShed restarts, and LogShed itself answers 503 while it upgrades its database.
+    """
 
 
 class LogShedOperationTimeout(LogShedError):
@@ -75,7 +83,7 @@ class LogShedBadRequest(LogShedError):
 
 
 class LogShedServerError(LogShedError):
-    """Exception raised on server internal error (500)."""
+    """Exception raised on a server error other than 502, 503 and 504 (500, for example)."""
 
 
 @dataclass
@@ -288,6 +296,13 @@ class LogShedApiClient:
 
                 if status in (400, 422):
                     raise LogShedBadRequest(await self._error_detail(response, "Bad request"))
+
+                if status in GATEWAY_STATUSES:
+                    raise LogShedCannotConnect(
+                        await self._error_detail(
+                            response, f"LogShed returned {status} (it may be restarting)"
+                        )
+                    )
 
                 if status >= 500:
                     raise LogShedServerError(
