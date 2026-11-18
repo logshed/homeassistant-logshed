@@ -63,7 +63,8 @@ def _longest_silent(metrics: LogShedMetrics) -> dict[str, Any] | None:
     """
     docker_addresses = {s["address"] for s in metrics.sources or [] if s["kind"] == "docker"}
     ranked = [
-        s for s in _sources_by_silence(metrics)
+        s
+        for s in _sources_by_silence(metrics)
         if not (s["kind"] == "alias" and s["address"] in docker_addresses)
     ]
     return ranked[0] if ranked else None
@@ -246,7 +247,9 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         translation_key="longest_silent_source",
         icon="mdi:timer-sand",
         # The source's name, so its history is a timeline of names; when it last sent is an attribute
-        value_fn=lambda metrics: quietest["name"] if (quietest := _longest_silent(metrics)) else None,
+        value_fn=lambda metrics: (
+            quietest["name"] if (quietest := _longest_silent(metrics)) else None
+        ),
         extra_attrs_fn=_longest_silent_attrs,
         exists_fn=lambda metrics: metrics.sources is not None,
     ),

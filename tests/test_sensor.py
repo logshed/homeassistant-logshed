@@ -251,9 +251,13 @@ async def test_longest_silent_source_when_every_source_was_seen(
     """With every source seen, the one whose last log is oldest is the state, with that time."""
     data = {
         **MOCK_SYSTEM_METRICS_140_RESPONSE,
-        "sources": [s for s in MOCK_SYSTEM_METRICS_140_RESPONSE["sources"] if s["last_seen"] is not None],
+        "sources": [
+            s for s in MOCK_SYSTEM_METRICS_140_RESPONSE["sources"] if s["last_seen"] is not None
+        ],
     }
-    mock_api_client.async_get_system_metrics = AsyncMock(return_value=LogShedMetrics.from_dict(data))
+    mock_api_client.async_get_system_metrics = AsyncMock(
+        return_value=LogShedMetrics.from_dict(data)
+    )
     await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
 
     state = hass.states.get("sensor.logshed_longest_silent_source")
@@ -272,12 +276,24 @@ async def test_longest_silent_source_names_a_source_that_never_sent(
     data = {
         **MOCK_SYSTEM_METRICS_140_RESPONSE,
         "sources": [
-            {"name": "LogShed", "kind": "alias", "address": "127.0.0.1", "last_seen": "2026-11-18T12:00:00+00:00"},
-            {"name": "Unraid", "kind": "alias", "address": "192.168.1.10", "last_seen": "2026-11-18T11:58:00+00:00"},
+            {
+                "name": "LogShed",
+                "kind": "alias",
+                "address": "127.0.0.1",
+                "last_seen": "2026-11-18T12:00:00+00:00",
+            },
+            {
+                "name": "Unraid",
+                "kind": "alias",
+                "address": "192.168.1.10",
+                "last_seen": "2026-11-18T11:58:00+00:00",
+            },
             {"name": "OPNsense", "kind": "alias", "address": "192.168.1.1", "last_seen": None},
         ],
     }
-    mock_api_client.async_get_system_metrics = AsyncMock(return_value=LogShedMetrics.from_dict(data))
+    mock_api_client.async_get_system_metrics = AsyncMock(
+        return_value=LogShedMetrics.from_dict(data)
+    )
     await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
 
     state = hass.states.get("sensor.logshed_longest_silent_source")
@@ -298,7 +314,9 @@ async def test_longest_silent_source_skips_an_alias_its_docker_host_covers(
             {"name": "docker box", "kind": "alias", "address": "10.0.0.20", "last_seen": None},
         ],
     }
-    mock_api_client.async_get_system_metrics = AsyncMock(return_value=LogShedMetrics.from_dict(data))
+    mock_api_client.async_get_system_metrics = AsyncMock(
+        return_value=LogShedMetrics.from_dict(data)
+    )
     await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
 
     state = hass.states.get("sensor.logshed_longest_silent_source")
