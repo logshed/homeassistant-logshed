@@ -45,24 +45,36 @@ def _parse_time(value: Any) -> datetime | None:
 
 
 def _sources_by_silence(metrics: LogShedMetrics) -> list[dict[str, Any]]:
-    """The sources, the longest silent first; those not seen since LogShed 1.4.0 last."""
+    """
+    The sources, the longest silent first. Those with no log since LogShed 1.4.0 started come
+    first, in LogShed's order: they have been silent longest.
+    """
     sources = metrics.sources or []
     seen = [s for s in sources if _parse_time(s["last_seen"]) is not None]
     seen.sort(key=lambda s: _parse_time(s["last_seen"]))
-    return seen + [s for s in sources if _parse_time(s["last_seen"]) is None]
+    return [s for s in sources if _parse_time(s["last_seen"]) is None] + seen
 
 
 def _longest_silent(metrics: LogShedMetrics) -> dict[str, Any] | None:
-    ordered = _sources_by_silence(metrics)
-    if ordered and _parse_time(ordered[0]["last_seen"]) is not None:
-        return ordered[0]
-    return None
+    """
+    The first of the sources by silence, leaving out a host alias on a Docker host's address: LogShed
+    counts that machine's container logs for the Docker host, so an alias for a machine that sends
+    only container logs would stay never seen and hide every other quiet source.
+    """
+    docker_addresses = {s["address"] for s in metrics.sources or [] if s["kind"] == "docker"}
+    ranked = [
+        s for s in _sources_by_silence(metrics)
+        if not (s["kind"] == "alias" and s["address"] in docker_addresses)
+    ]
+    return ranked[0] if ranked else None
 
 
 def _longest_silent_attrs(metrics: LogShedMetrics) -> dict[str, Any]:
     quietest = _longest_silent(metrics)
+    last_seen = quietest["last_seen"] if quietest and _parse_time(quietest["last_seen"]) else None
     return {
-        "source_name": quietest["name"] if quietest else None,
+        "last_seen": last_seen,
+        "silent_since_start": (last_seen is None) if quietest else None,
         "source_count": len(metrics.sources or []),
         "sources": _sources_by_silence(metrics),
     }
@@ -233,10 +245,8 @@ SENSOR_DESCRIPTIONS: tuple[LogShedSensorEntityDescription, ...] = (
         key="longest_silent_source",
         translation_key="longest_silent_source",
         icon="mdi:timer-sand",
-        device_class=SensorDeviceClass.TIMESTAMP,
-        value_fn=lambda metrics: (
-            _parse_time(quietest["last_seen"]) if (quietest := _longest_silent(metrics)) else None
-        ),
+        # The source's name, so its history is a timeline of names; when it last sent is an attribute
+        value_fn=lambda metrics: quietest["name"] if (quietest := _longest_silent(metrics)) else None,
         extra_attrs_fn=_longest_silent_attrs,
         exists_fn=lambda metrics: metrics.sources is not None,
     ),

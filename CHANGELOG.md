@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Longest Silent Source sensor (`timestamp`): when the configured source (host alias or enabled Docker host) that has been silent longest last sent a log, with its name, the number of sources and every source's last-seen time as attributes. Needs LogShed 1.4.0.
+- Longest Silent Source sensor: the name of the configured source (host alias or enabled Docker host) that has been silent longest, so its history is a timeline of names. A source with no log since LogShed 1.4.0 started counts as silent longest; a host alias on a Docker host's address is left out of the ranking, since the Docker host stands for that machine. Attributes: when that source last sent a log (`last_seen`), whether it has sent none (`silent_since_start`), the number of sources and every source's last-seen time. Needs LogShed 1.4.0.
 - Last Backup sensor (`timestamp`, diagnostic): when LogShed made its newest database backup, with its size in bytes as an attribute. Needs LogShed 1.4.0.
 - Server Status sensor (diagnostic): `running`, `upgrading` (with the upgrade stage and progress), `recovery`, `error` or `unreachable`, and never unavailable. LogShed 1.4.0 reports its database upgrades and recovery mode.
 - Diagnostics leave out the source addresses.

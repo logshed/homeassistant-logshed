@@ -109,8 +109,11 @@
       "longest_silent_source": {
         "name": "Longest Silent Source",
         "state_attributes": {
-          "source_name": {
-            "name": "Source"
+          "last_seen": {
+            "name": "Last seen"
+          },
+          "silent_since_start": {
+            "name": "Never seen"
           },
           "source_count": {
             "name": "Sources"

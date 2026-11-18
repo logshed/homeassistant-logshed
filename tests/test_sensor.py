@@ -216,7 +216,7 @@ async def test_longest_silent_source_and_last_backup(
     mock_config_entry: MockConfigEntry,
     mock_api_client: LogShedApiClient,
 ) -> None:
-    """The longest-silent source's last log is the state; never-seen sources are listed last."""
+    """The longest-silent source's name is the state; a source never seen has been silent longest."""
     mock_api_client.async_get_system_metrics = AsyncMock(
         return_value=LogShedMetrics.from_dict(MOCK_SYSTEM_METRICS_140_RESPONSE)
     )
@@ -224,11 +224,13 @@ async def test_longest_silent_source_and_last_backup(
     entity_reg = er.async_get(hass)
 
     state = hass.states.get("sensor.logshed_longest_silent_source")
-    assert state.state == "2026-11-16T07:30:00+00:00"
-    assert state.attributes["device_class"] == "timestamp"
-    assert state.attributes["source_name"] == "Media server"
+    # The printer has sent nothing since LogShed 1.4.0 started: it ranks before every source seen
+    assert state.state == "printer"
+    assert "device_class" not in state.attributes
+    assert state.attributes["last_seen"] is None
+    assert state.attributes["silent_since_start"] is True
     assert state.attributes["source_count"] == 3
-    assert [s["name"] for s in state.attributes["sources"]] == ["Media server", "nas", "printer"]
+    assert [s["name"] for s in state.attributes["sources"]] == ["printer", "Media server", "nas"]
     # The list changes on most polls, so it stays out of the recorder
     assert "sources" in state.state_info["unrecorded_attributes"]
     entry = entity_reg.async_get("sensor.logshed_longest_silent_source")
@@ -241,15 +243,81 @@ async def test_longest_silent_source_and_last_backup(
     assert entry.entity_category == EntityCategory.DIAGNOSTIC
 
 
+async def test_longest_silent_source_when_every_source_was_seen(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """With every source seen, the one whose last log is oldest is the state, with that time."""
+    data = {
+        **MOCK_SYSTEM_METRICS_140_RESPONSE,
+        "sources": [s for s in MOCK_SYSTEM_METRICS_140_RESPONSE["sources"] if s["last_seen"] is not None],
+    }
+    mock_api_client.async_get_system_metrics = AsyncMock(return_value=LogShedMetrics.from_dict(data))
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
+
+    state = hass.states.get("sensor.logshed_longest_silent_source")
+    assert state.state == "Media server"
+    assert state.attributes["last_seen"] == "2026-11-16T07:30:00.250000+00:00"
+    assert state.attributes["silent_since_start"] is False
+    assert [s["name"] for s in state.attributes["sources"]] == ["Media server", "nas"]
+
+
+async def test_longest_silent_source_names_a_source_that_never_sent(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """A firewall silent for a week before the upgrade has no last-seen time, yet is the quietest."""
+    data = {
+        **MOCK_SYSTEM_METRICS_140_RESPONSE,
+        "sources": [
+            {"name": "LogShed", "kind": "alias", "address": "127.0.0.1", "last_seen": "2026-11-18T12:00:00+00:00"},
+            {"name": "Unraid", "kind": "alias", "address": "192.168.1.10", "last_seen": "2026-11-18T11:58:00+00:00"},
+            {"name": "OPNsense", "kind": "alias", "address": "192.168.1.1", "last_seen": None},
+        ],
+    }
+    mock_api_client.async_get_system_metrics = AsyncMock(return_value=LogShedMetrics.from_dict(data))
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
+
+    state = hass.states.get("sensor.logshed_longest_silent_source")
+    assert state.state == "OPNsense"
+    assert state.attributes["silent_since_start"] is True
+
+
+async def test_longest_silent_source_skips_an_alias_its_docker_host_covers(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: LogShedApiClient,
+) -> None:
+    """An alias on a Docker host's address counts no container logs: the Docker host stands for it."""
+    data = {
+        **MOCK_SYSTEM_METRICS_140_RESPONSE,
+        "sources": [
+            *[s for s in MOCK_SYSTEM_METRICS_140_RESPONSE["sources"] if s["last_seen"] is not None],
+            {"name": "docker box", "kind": "alias", "address": "10.0.0.20", "last_seen": None},
+        ],
+    }
+    mock_api_client.async_get_system_metrics = AsyncMock(return_value=LogShedMetrics.from_dict(data))
+    await setup_integration(hass, mock_config_entry, mock_api_client, [Platform.SENSOR])
+
+    state = hass.states.get("sensor.logshed_longest_silent_source")
+    assert state.state == "Media server"
+    assert state.attributes["silent_since_start"] is False
+    # Still listed, with every other source
+    assert state.attributes["source_count"] == 3
+    assert [s["name"] for s in state.attributes["sources"]] == ["docker box", "Media server", "nas"]
+
+
 async def test_new_sensors_unknown_without_data(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_api_client: LogShedApiClient,
 ) -> None:
-    """No source seen since 1.4.0 and no backup yet: both sensors exist, unknown."""
+    """No source configured and no backup yet: both sensors exist, unknown."""
     data = {
         **MOCK_SYSTEM_METRICS_140_RESPONSE,
-        "sources": [{"name": "nas", "kind": "syslog", "address": "10.0.0.5", "last_seen": None}],
+        "sources": [],
         "last_backup": None,
     }
     mock_api_client.async_get_system_metrics = AsyncMock(
@@ -259,8 +327,9 @@ async def test_new_sensors_unknown_without_data(
 
     state = hass.states.get("sensor.logshed_longest_silent_source")
     assert state.state == "unknown"
-    assert state.attributes["source_name"] is None
-    assert state.attributes["source_count"] == 1
+    assert state.attributes["last_seen"] is None
+    assert state.attributes["silent_since_start"] is None
+    assert state.attributes["source_count"] == 0
     state = hass.states.get("sensor.logshed_last_backup")
     assert state.state == "unknown"
     assert state.attributes["size_bytes"] is None

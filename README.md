@@ -18,7 +18,7 @@ Connects your Home Assistant instance with your self-hosted [LogShed](https://gi
 - **Automated Maintenance Integration:** Native switches and service actions (`logshed.enable_maintenance`, `logshed.disable_maintenance`) for backup hooks (Home Assistant Backups, Proxmox VE backups, restic, Borg) to silence alerts or drop error floods during scheduled backup routines.
 - **Diagnostic Controls:** On-demand database compaction (`VACUUM`) and retention pruning buttons directly within Home Assistant.
 - **Update Notifications:** An update entity shows when a newer stable LogShed release is available.
-- **Sources and Server Health:** When the longest-silent configured source last sent a log, when the newest backup was made, and whether LogShed is running, upgrading its database or waiting in recovery (LogShed 1.4.0 or later for sources, backups and upgrades).
+- **Sources and Server Health:** Which configured source has been silent longest and since when, when the newest backup was made, and whether LogShed is running, upgrading its database or waiting in recovery (LogShed 1.4.0 or later for sources, backups and upgrades).
 - **Diagnostics:** Download config entry diagnostics (API token and source addresses redacted) from the integration page for troubleshooting.
 
 ---
@@ -117,7 +117,7 @@ The rolling counts are gauges (`measurement`) that rise and fall as logs age out
 | `sensor.logshed_warning_logs_24h` | Warning Logs 24h | `logs` | `measurement` | Rolling 24-hour count of warning (severity 4) logs. |
 | `sensor.logshed_total_logs` | Total Logs | `logs` | `measurement` | Current count of stored logs in the database. |
 | `sensor.logshed_maintenance_remaining`| Maintenance Remaining| `min` | `duration` | Time remaining in the current active maintenance window. Reported in seconds and shown in whole minutes by default; change the unit in the entity settings. |
-| `sensor.logshed_longest_silent_source` | Longest Silent Source | | `timestamp` | When the configured source (a host alias or an enabled Docker host in LogShed's Settings > Sources) that has been silent longest last sent a log, shown as "3 hours ago". Attributes: `source_name` (that source), `source_count` and `sources` (every source with its `name`, `kind` (`alias` for a host alias, `docker` for a Docker host), `address` and `last_seen`, the longest silent first; sources with no log since LogShed 1.4.0 come last and do not count for the state). `sources` is not kept in the recorder. Unknown when no source has sent a log yet. Needs LogShed 1.4.0; it appears on the first poll after LogShed is upgraded. |
+| `sensor.logshed_longest_silent_source` | Longest Silent Source | | | The name of the configured source (a host alias or an enabled Docker host in LogShed's Settings > Sources) that has been silent longest, so its history shows which source was quietest when. A source with no log since LogShed 1.4.0 started has been silent longest of all. A host alias on a Docker host's address is left out of the ranking (LogShed counts that machine's container logs for the Docker host), but stays in `sources`. Attributes: `last_seen` (when that source last sent a log, or `null` if it has sent none), `silent_since_start` (`true` when it has sent none), `source_count` and `sources` (every source with its `name`, `kind` (`alias` for a host alias, `docker` for a Docker host), `address` and `last_seen`, the longest silent first, those with no log first of all). `sources` is not kept in the recorder. Unknown when no source is configured. Needs LogShed 1.4.0; it appears on the first poll after LogShed is upgraded. |
 
 ### Diagnostic Sensors
 
@@ -250,7 +250,7 @@ entities:
 
 ### A Source Goes Quiet
 
-Get a notification when a configured source has sent nothing for an hour:
+Get a notification when a configured source has sent nothing for an hour, or nothing at all since LogShed 1.4.0 started:
 
 ```yaml
 alias: "LogShed: Source Gone Quiet"
@@ -258,15 +258,17 @@ description: "Notify when a LogShed source has been silent for an hour"
 trigger:
   - platform: template
     value_template: >-
-      {{ states('sensor.logshed_longest_silent_source') not in ['unknown', 'unavailable']
-         and now() - as_datetime(states('sensor.logshed_longest_silent_source')) > timedelta(hours=1) }}
+      {% set seen = state_attr('sensor.logshed_longest_silent_source', 'last_seen') %}
+      {{ state_attr('sensor.logshed_longest_silent_source', 'silent_since_start') == true
+         or (seen is not none and now() - as_datetime(seen) > timedelta(hours=1)) }}
 action:
   - action: notify.persistent_notification
     data:
       title: "LogShed source silent"
       message: >-
-        {{ state_attr('sensor.logshed_longest_silent_source', 'source_name') }} has sent no log
-        since {{ states('sensor.logshed_longest_silent_source') }}.
+        {% set seen = state_attr('sensor.logshed_longest_silent_source', 'last_seen') %}
+        {{ states('sensor.logshed_longest_silent_source') }} has sent no log
+        {{ 'since ' ~ seen if seen else 'since LogShed 1.4.0 started' }}.
 ```
 
 ### Incident Warning Light
